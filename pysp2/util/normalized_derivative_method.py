@@ -25,42 +25,43 @@ def central_difference(S, min_signal=1e-13, num_records=None):
     -------
     dSdt : xarray Dataset
         Fourth-order numerical derivative S'(t).
-    norm_deriv: xarray Dataset
-        Normalized derivative S'(t) / S(t).
     """
     
     if num_records is None:
         num_records = S.dims['event_index']
     print(f'Processing {num_records} records...')
     
-    time = S['time'].values
-    print(f'Time:' f'  shape: {time.shape}, dtype: {time.dtype}, min: {time.min()}, max: {time.max()}')
-    if time.ndim == 2:
-        time = time[0]  # Take the first event's time axis if 2D
-    dt = np.diff(time).mean()
-    if np.issubdtype(dt.dtype, np.timedelta64):
-        dt = dt / np.timedelta64(1, 's')  # convert to seconds as float
-    print(f'Calculated dt: {dt}')
-    if dt == 0 or np.isnan(dt):
-        print('Warning: dt is zero or NaN!')
-    n_time = 100
-    print(f'Number of time points: {n_time}')
+    dt = 200e-9  # Time step in seconds
+    n_time = 100 # Number of time bins (assuming 100 bins from 0 to 100)
+
     # Only process the first record and 'Data_ch0' for now
-    S_i = S.isel(event_index=0)
-    ch = 'Data_ch0'
-    y = S_i[ch].values
-    print(f'Input signal y: shape: {y.shape}, dtype: {y.dtype}, min: {y.min()}, max: {y.max()}')    
-    dSdt = np.full_like(y, np.nan, dtype=np.float64)
-    # --- Forward difference (i = 0, 1) ---
-    dSdt[0] = (-25*y[0] + 48*y[1] - 36*y[2] + 16*y[3] - 3*y[4]) / (12*dt)
-    dSdt[1] = (-25*y[1] + 48*y[2] - 36*y[3] + 16*y[4] - 3*y[5]) / (12*dt)
-    # --- Central difference (i = 2 ... n-3) ---
-    for i in range(2, n_time-2):
-        dSdt[i] = (-y[i+2] + 8*y[i+1] - 8*y[i-1] + y[i-2]) / (12*dt)
-    # --- Backward difference (i = n-2, n-1) ---
-    dSdt[n_time-2] = (25*y[n_time-2] - 48*y[n_time-3] + 36*y[n_time-4] - 16*y[n_time-5] + 3*y[n_time-6]) / (12*dt)
-    dSdt[n_time-1] = (25*y[n_time-1] - 48*y[n_time-2] + 36*y[n_time-3] - 16*y[n_time-4] + 3*y[n_time-5]) / (12*dt)
-    # Wrap as DataArray with same coords as input
-    dSdt_da = xr.DataArray(dSdt, dims=S_i[ch].dims, coords=S_i[ch].coords, name=f'd{ch}_dt')
-    return dSdt_da
+    channels = ['Data_ch0', 'Data_ch4']
+    dSdt = {}
+    for ch in channels:
+        dSdt_ch = np.full((num_records, n_time), np.nan, dtype=np.float64)
+        for i_event in range(num_records):
+            S_i = S.isel(event_index=i_event)
+            y = S_i[ch].values
+            dSdt_i = np.full_like(y, np.nan, dtype=np.float64)
+            # --- Forward difference (i = 0, 1) ---
+            dSdt_i[0] = (-25*y[0] + 48*y[1] - 36*y[2] + 16*y[3] - 3*y[4]) / (12*dt)
+            dSdt_i[1] = (-25*y[1] + 48*y[2] - 36*y[3] + 16*y[4] - 3*y[5]) / (12*dt)
+            # --- Central difference (i = 2 ... n-3) ---
+            for i in range(2, n_time-2):
+                dSdt_i[i] = (-y[i+2] + 8*y[i+1] - 8*y[i-1] + y[i-2]) / (12*dt)
+            # --- Backward difference (i = n-2, n-1) ---
+            dSdt_i[n_time-2] = (25*y[n_time-2] - 48*y[n_time-3] + 36*y[n_time-4] - 16*y[n_time-5] + 3*y[n_time-6]) / (12*dt)
+            dSdt_i[n_time-1] = (25*y[n_time-1] - 48*y[n_time-2] + 36*y[n_time-3] - 16*y[n_time-4] + 3*y[n_time-5]) / (12*dt)
+            dSdt_ch[i_event, :] = dSdt_i
+        # Wrap as DataArray with event_index and time dims
+        dSdt_ch0_ch4 = xr.DataArray(
+            dSdt_ch,
+            dims=('event_index', 'time'),
+            coords={'event_index': S['event_index'], 'time': S['time']},
+            name=f'd{ch}_dt'
+        )
+        dSdt[ch] = dSdt_ch0_ch4
+    # Return as a Dataset with both channels
+    print('dSdt_dict', dSdt)
+    return xr.Dataset(dSdt)
 
