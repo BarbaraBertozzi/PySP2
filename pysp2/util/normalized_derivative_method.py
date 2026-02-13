@@ -1,30 +1,30 @@
 import numpy as np
-from scipy.optimize import curve_fit
 import xarray as xr
 
 def central_difference(S, num_records=None):
 
     """ 
-    Compute normalized derivative S'(t) / S(t) using the 
-    central difference scheme (Moteki & Kondo, Eq. A.2). 
+    Compute fourth order derivative S'(t) using the 
+    central difference scheme (Moteki & Kondo, Eq. A.1)
+    for scattering channels (ch0 and ch4).
     Interior points:
-    - Fourth-order central difference 
+        - Fourth-order central difference 
     Edge cases: 
-    - First two points: fourth-order forward difference  
-    - Last two points: fourth-order backward difference 
+        - First two points: fourth-order forward difference  
+        - Last two points: fourth-order backward difference 
 
     Parameters 
     ---------- 
     S: xarray Dataset 
-    The scattering signal dataset. 
+        The scattering signal dataset. 
     num_records: int or None 
-    Only process first num_records datapoints. 
-    Set to None to process all records. 
+        Only process first num_records datapoints. 
+        Set to None to process all records. 
 
     Returns 
     ------- 
     dSdt : xarray Dataset 
-    Fourth-order numerical derivative S'(t). 
+        Fourth-order numerical derivative S'(t). 
     """
 
     if num_records is None:
