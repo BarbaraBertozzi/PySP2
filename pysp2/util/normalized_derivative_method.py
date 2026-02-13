@@ -4,7 +4,8 @@ import xarray as xr
 
 def central_difference(S, num_records=None):
 
-    """ Compute normalized derivative S'(t) / S(t) using the 
+    """ 
+    Compute normalized derivative S'(t) / S(t) using the 
     central difference scheme (Moteki & Kondo, Eq. A.2). 
     Interior points:
     - Fourth-order central difference 
