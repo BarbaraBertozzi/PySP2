@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.optimize import curve_fit
 import xarray as xr
 
 def central_difference(S, num_records=None):
