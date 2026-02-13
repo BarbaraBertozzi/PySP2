@@ -7,9 +7,10 @@ def test_central_difference():
     my_binary = pysp2.util.gaussian_fit(my_sp2b, my_ini, parallel=False)
     dSdt = pysp2.util.central_difference(my_binary)
     
-    # Check that the outputs have the expected dimensions and contain finite values
-    print(f'dSdt shape: {dSdt.dims}')
-    print(f'my_binary shape: {my_binary.dims}')
-
-    #assert dSdt.dims == my_binary.dims
+    np.testing.assert_almost_equal(dSdt['Data_ch4'].isel(event_index=5876, time=0).item(), 
+                                   8.3333333333e6, decimal=2)
+    np.testing.assert_almost_equal(dSdt['Data_ch4'].isel(event_index=5876, time=99).item(), 
+                                   7.166666666e7, decimal=2)
+    np.testing.assert_almost_equal(dSdt['Data_ch4'].isel(event_index=5876, time=19).item(), 
+                                   1.5e7, decimal=2)
     assert np.isfinite(dSdt).all()
