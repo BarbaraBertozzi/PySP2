@@ -4,6 +4,28 @@ import xarray as xr
 
 def central_difference(S, num_records=None):
 
+    """ Compute normalized derivative S'(t) / S(t) using the 
+    central difference scheme (Moteki & Kondo, Eq. A.2). 
+    Interior points:
+    - Fourth-order central difference 
+    Edge cases: 
+    - First two points: fourth-order forward difference  
+    - Last two points: fourth-order backward difference 
+
+    Parameters 
+    ---------- 
+    S: xarray Dataset 
+    The scattering signal dataset. 
+    num_records: int or None 
+    Only process first num_records datapoints. 
+    Set to None to process all records. 
+
+    Returns 
+    ------- 
+    dSdt : xarray Dataset 
+    Fourth-order numerical derivative S'(t). 
+    """
+
     if num_records is None:
         num_records = S.sizes['event_index']
 
