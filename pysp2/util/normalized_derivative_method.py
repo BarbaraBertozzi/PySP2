@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 
-def central_difference(S, num_records=None):
+def central_difference(S, num_records=None, normalize=True):
 
     """ 
     Compute fourth order derivative S'(t) using the 
@@ -20,6 +20,9 @@ def central_difference(S, num_records=None):
     num_records: int or None 
         Only process first num_records datapoints. 
         Set to None to process all records. 
+    normalize: bool
+        If True, normalize the derivative by the scattering signal 
+        S(t) to get (1/S) * dS/dt.
 
     Returns 
     ------- 
@@ -51,6 +54,12 @@ def central_difference(S, num_records=None):
         n = y.shape[1]
         d[:, n-2] = (25*y[:, n-2] - 48*y[:, n-3] + 36*y[:, n-4] - 16*y[:, n-5] + 3*y[:, n-6]) / (12*dt)
         d[:, n-1] = (25*y[:, n-1] - 48*y[:, n-2] + 36*y[:, n-3] - 16*y[:, n-4] + 3*y[:, n-5]) / (12*dt)
+
+        if normalize:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                d = np.where(y != 0, d / y, 0)  
+        else:
+            d = d
 
         dSdt[ch] = xr.DataArray(
             d,
