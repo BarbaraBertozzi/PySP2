@@ -73,3 +73,37 @@ def central_difference(S, num_records=None, normalize=True):
 
     return xr.Dataset(dSdt)
 
+
+def plot_normalized_derivative(ds, record_no, chn=0):
+    """
+    Plots the normalized derivative of the scattering signal for a given record_no and channel.
+
+    Parameters
+    ----------
+    ds: xarray Dataset
+        The dataset containing the normalized derivative to plot.
+    record_no: int
+        The record number to plot.
+    chn: int
+        The channel number to plot (0 or 4).
+    Returns
+    -------
+    ax: matplotlib Axes
+        The axes object containing the plot.
+    """
+    import matplotlib.pyplot as plt
+
+    if chn not in [0, 4]:
+        raise ValueError("Channel number must be 0 or 4.")
+
+    ch_name = f'dData_ch{chn}_dt'
+    plt.figure(figsize=(10, 6))
+    ax = plt.gca()
+    ds[ch_name].isel(event_index=record_no).plot(ax=ax)
+    ax.set_title(f'Normalized Derivative of Scattering Signal - Channel {chn} Record {record_no}')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Normalized Derivative')
+    plt.grid()
+    plt.show()
+
+    return ax
