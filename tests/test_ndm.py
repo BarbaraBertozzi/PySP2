@@ -1,6 +1,8 @@
 import pysp2
 import numpy as np
 
+from pysp2.util.normalized_derivative_method import plot_normalized_derivative
+
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
     my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)
@@ -22,3 +24,6 @@ def test_central_difference():
                                    7.166666666e7/-30152, decimal=2)
     np.testing.assert_almost_equal(dSdt_norm['Data_ch4'].isel(event_index=5876, time=19).item(), 
                                    1.5e7/-30132, decimal=2)
+    
+    # ---- Call plotting function ----
+    #plot_normalized_derivative(dSdt_norm, record_no=1000, chn=0)

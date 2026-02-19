@@ -95,15 +95,26 @@ def plot_normalized_derivative(ds, record_no, chn=0):
 
     if chn not in [0, 4]:
         raise ValueError("Channel number must be 0 or 4.")
+    
+    spectra = ds.isel(event_index=record_no)
+    time = spectra['time'].values
+    inp_data = {}
+    inp_data['time'] = xr.DataArray(np.array(time[np.newaxis]),
+                                    dims=['time'])
+    inp_data['Data_ch' + str(chn)] = xr.DataArray(
+        spectra['Data_ch' + str(chn)].values[np.newaxis, :],
+        dims=['time', 'bins'])
+    inp_data = xr.Dataset(inp_data)
+    bins = np.linspace(0, 100, 100)
 
-    ch_name = f'dData_ch{chn}_dt'
+    ch_name = f'Data_ch{chn}'
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
-    ds[ch_name].isel(event_index=record_no).plot(ax=ax)
+    inp_data[ch_name].plot(ax=ax)
     ax.set_title(f'Normalized Derivative of Scattering Signal - Channel {chn} Record {record_no}')
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Normalized Derivative')
     plt.grid()
-    plt.show()
+    #plt.show()
 
     return ax
