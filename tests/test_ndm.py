@@ -25,5 +25,3 @@ def test_central_difference():
     np.testing.assert_almost_equal(dSdt_norm['Data_ch4'].isel(event_index=5876, time=19).item(), 
                                    1.5e7/-30132, decimal=2)
     
-    # ---- Call plotting function ----
-    #plot_normalized_derivative(dSdt_norm, record_no=1000, chn=0)

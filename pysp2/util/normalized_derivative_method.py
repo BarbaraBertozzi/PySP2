@@ -115,6 +115,5 @@ def plot_normalized_derivative(ds, record_no, chn=0):
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Normalized Derivative')
     plt.grid()
-    #plt.show()
 
     return ax
