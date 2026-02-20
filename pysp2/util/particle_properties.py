@@ -535,7 +535,7 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
         SpecSizeBins_ = np.zeros(num_bins)
         for i in range(1,num_bins+1):
             SpecSizeBins_[i-1] = np.sqrt(SpecSizeBins[i-1]*SpecSizeBins[i])
-    SpecSizeBins = xr.DataArray(SpecSizeBins_, dims=('num_bins'))
+        SpecSizeBins = xr.DataArray(SpecSizeBins_, dims=('num_bins'))
     SpecSizeBins.attrs["long_name"] = "Spectra size bin centers"
     SpecSizeBins.attrs["standard_name"] = "particle_diameter"
     SpecSizeBins.attrs["units"] = "um"
