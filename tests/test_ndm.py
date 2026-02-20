@@ -1,8 +1,6 @@
 import pysp2
 import numpy as np
 
-from pysp2.util.normalized_derivative_method import plot_normalized_derivative
-
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
     my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)

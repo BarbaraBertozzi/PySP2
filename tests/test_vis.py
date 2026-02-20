@@ -15,6 +15,7 @@ def test_plot_normalized_derivative():
     dSdt_norm = pysp2.util.central_difference(my_binary, normalize=True)
 
     # Test the plotting function for channel 0 and record number 2
-    ax = plot_normalized_derivative(dSdt_norm, record_no=2, chn=0)
+    ax = plot_normalized_derivative(dSdt_norm, record_no=304, chn=0)
+    fig = ax.figure
     
-    return ax
+    return fig
