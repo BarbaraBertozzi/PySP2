@@ -177,19 +177,35 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
         The xarray Dataset containing the housekeeping variables
     config: dict
         The .ini file loaded as a dict.
-    deltaSize: float
-        The size distribution bin width in microns.
+    deltaSize: float or str
+        The size distribution bin width in microns if input is float.
+        If 'log' then the size distribution bin width will be even in log space.
     num_bins: int
         The number of size bins
     avg_interval: int
         The time in seconds to average the concentrations into.
+    deadtime_correction: bool
+        Set to True if you want to correct for the deatime. Default is False.
+    leo_fits: bool
+        Set to True if you want to do LEO-fits. Default is False. LEO fits are 
+        done using utils/leo_fits.py
+    Globals: DMTGlobals structure or None
+        DMTGlobals structure containing calibration coefficients. Set to
+        None to use default values for MOSAiC.
 
     Returns
     -------
     psd_ds: xarray Dataset
         The xarray Dataset containing the time-averaged particle statistics.
     """
-    DMTGlobal = DMTGlobals()
+    
+    if Globals == None:
+        DMTGlobal = DMTGlobals()
+        print('Warning: Using DMTGlobal as default. To avoid this warning, \
+              define Globals!=None as input variable to function call process_psds()')
+    else:
+        DMTGlobal = Globals
+
     #Housekeeping 'Timestamp' is in seconds since 01-01-1904 00:00:00 UTC
     time_bins = np.arange(hk_ds['Timestamp'].values[0], 
                           hk_ds['Timestamp'].values[-1],
@@ -215,7 +231,12 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
     ScatDiaSO4 = particle_ds['ScatDiaSO4'].values / 1000.
     sootMass = particle_ds['sootMass'].values
     SizeIncandOnly = particle_ds['sootDiam'].values / 1000.
-    SpecSizeBins = 0.01 + np.arange(0, num_bins, 1) * deltaSize
+    if isinstance(deltaSize, float):
+        SpecSizeBins = 0.01 + np.arange(0, num_bins, 1) * deltaSize
+    elif deltaSize == 'log':
+        SpecSizeBins = np.logspace(np.log10(0.01), np.log10(1.00), num_bins+1)
+        #Setting deltaSize to zero will make SpecSizeBins become bin edges instead of bin centres
+        deltaSize = 0
     ScatNumEnsembleBC = np.zeros((len(time_bins[:-1]), num_bins))
     ScatMassEnsembleBC = np.zeros_like(ScatNumEnsembleBC)
     IncanNumEnsemble = np.zeros((len(time_bins[:-1]), num_bins))
@@ -280,33 +301,49 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
         # Remove particles above max size
         the_particles_scat = np.logical_and.reduce(
             (the_particles, ScatDiaBC50 < SpecSizeBins[-1] + deltaSize / 2))
-        ind = np.searchsorted(SpecSizeBins+deltaSize / 2,
+        ind = np.searchsorted(SpecSizeBins + deltaSize / 2,
                               ScatDiaBC50[the_particles_scat], side='right')
-        #np.add.at(ScatNumEnsembleBC[t,:], ind, OneOfEvery)
-        np.add.at(ScatNumEnsembleBC[t,:], ind, OneOfEvery[the_particles_scat])
+        
+        if deltaSize==0:
+            np.add.at(ScatNumEnsembleBC[t,:], ind-1, OneOfEvery[the_particles_scat])
+        else:
+            np.add.at(ScatNumEnsembleBC[t,:], ind, OneOfEvery[the_particles_scat])
         
         # Remove oversize particles
         the_particles_scat = np.logical_and.reduce(
             (the_particles, ScatDiaSO4 < SpecSizeBins[-1] + deltaSize / 2))
-        ind = np.searchsorted(SpecSizeBins+deltaSize / 2, ScatDiaSO4[the_particles_scat], side='right')
-        #np.add.at(ScatNumEnsemble[t,:], ind, OneOfEvery)
-        np.add.at(ScatNumEnsemble[t,:], ind, OneOfEvery[the_particles_scat])
-        #np.add.at(ScatMassEnsemble[t,:], ind, OneOfEvery * ScatMassSO4[the_particles_scat])
-        np.add.at(ScatMassEnsemble[t,:], ind, np.multiply(
-            OneOfEvery[the_particles_scat], ScatMassSO4[the_particles_scat]))
+        ind = np.searchsorted(SpecSizeBins + deltaSize / 2, ScatDiaSO4[the_particles_scat], side='right')
+        
+        if deltaSize==0:
+            np.add.at(ScatNumEnsemble[t,:], ind-1, OneOfEvery[the_particles_scat])
+        else:
+            np.add.at(ScatNumEnsemble[t,:], ind, OneOfEvery[the_particles_scat])
+        
+        if deltaSize==0:
+            np.add.at(ScatMassEnsemble[t,:], ind-1, np.multiply(
+                OneOfEvery[the_particles_scat], ScatMassSO4[the_particles_scat]))
+        else:
+            np.add.at(ScatMassEnsemble[t,:], ind, np.multiply(
+                OneOfEvery[the_particles_scat], ScatMassSO4[the_particles_scat]))
         
         the_particles = np.logical_and.reduce((parts_time, incand_accept))
         # Remove oversize particles
         the_particles_incan = np.logical_and.reduce(
             (the_particles, SizeIncandOnly < SpecSizeBins[-1] + deltaSize / 2))
-        ind = np.searchsorted(SpecSizeBins+deltaSize / 2, 
+        ind = np.searchsorted(SpecSizeBins + deltaSize / 2, 
                               SizeIncandOnly[the_particles_incan], side='right')
-        #np.add.at(IncanNumEnsemble[t,:], ind, OneOfEvery)
-        np.add.at(IncanNumEnsemble[t,:], ind, OneOfEvery[the_particles_incan])
-        #np.add.at(IncanMassEnsemble[t,:], ind, OneOfEvery * sootMass[the_particles_incan])
-        np.add.at(IncanMassEnsemble[t,:], ind, np.multiply(
-            OneOfEvery[the_particles_incan], sootMass[the_particles_incan]))
-        
+        if deltaSize=0:
+            np.add.at(IncanNumEnsemble[t,:], ind-1, OneOfEvery[the_particles_incan])
+        else:
+            np.add.at(IncanNumEnsemble[t,:], ind, OneOfEvery[the_particles_incan])
+    
+        if deltaSize==0:
+            np.add.at(IncanMassEnsemble[t,:], ind-1, np.multiply(
+                OneOfEvery[the_particles_incan], sootMass[the_particles_incan]))
+        else:      
+            np.add.at(IncanMassEnsemble[t,:], ind, np.multiply(
+                OneOfEvery[the_particles_incan], sootMass[the_particles_incan]))
+            
         if leo_fits:
             leo_ScatDiaSO4 = particle_ds['leo_ScatDiaSO4'].values / 1000.
             leo_scatter_accept = ~np.isnan(leo_ScatDiaSO4)
@@ -492,7 +529,13 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
     ScatNumEnsembleBC.attrs["standard_name"] = "scattering_number_distribution (black carbon)"
     ScatNumEnsembleBC.attrs["units"] = "cm-3 per bin"
     
-    SpecSizeBins = xr.DataArray(SpecSizeBins, dims=('num_bins'))
+    if deltaSize != 0:
+        SpecSizeBins = xr.DataArray(SpecSizeBins, dims=('num_bins'))
+    else:
+        SpecSizeBins_ = np.zeros(num_bins)
+        for i in range(1,num_bins+1):
+            SpecSizeBins_[i-1] = np.sqrt(SpecSizeBins[i-1]*SpecSizeBins[i])
+    SpecSizeBins = xr.DataArray(SpecSizeBins_, dims=('num_bins'))
     SpecSizeBins.attrs["long_name"] = "Spectra size bin centers"
     SpecSizeBins.attrs["standard_name"] = "particle_diameter"
     SpecSizeBins.attrs["units"] = "um"
