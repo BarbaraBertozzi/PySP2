@@ -332,7 +332,7 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
             (the_particles, SizeIncandOnly < SpecSizeBins[-1] + deltaSize / 2))
         ind = np.searchsorted(SpecSizeBins + deltaSize / 2, 
                               SizeIncandOnly[the_particles_incan], side='right')
-        if deltaSize=0:
+        if deltaSize==0:
             np.add.at(IncanNumEnsemble[t,:], ind-1, OneOfEvery[the_particles_incan])
         else:
             np.add.at(IncanNumEnsemble[t,:], ind, OneOfEvery[the_particles_incan])
