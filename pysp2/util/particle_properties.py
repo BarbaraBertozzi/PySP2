@@ -164,7 +164,8 @@ def calc_diams_masses(input_ds, debug=True, factor=1.0, Globals=None, leo_fits=F
 
 
 def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199, 
-                 avg_interval=10,deadtime_correction=False, leo_fits=False):
+                 avg_interval=10,deadtime_correction=False, leo_fits=False,
+                 Globals=None):
     """
     Processes the Scattering and BC mass size distributions:
 
