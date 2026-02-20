@@ -6,6 +6,8 @@ import numpy as np
 import pysp2
 from pysp2.util.normalized_derivative_method import plot_normalized_derivative
 
+matplotlib.use("Agg")
+
 @pytest.mark.mpl_image_compare(tolerance=10)
 def test_plot_normalized_derivative():
 
