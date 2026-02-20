@@ -22,3 +22,4 @@ def test_central_difference():
                                    7.166666666e7/-30152, decimal=2)
     np.testing.assert_almost_equal(dSdt_norm['Data_ch4'].isel(event_index=5876, time=19).item(), 
                                    1.5e7/-30132, decimal=2)
+    

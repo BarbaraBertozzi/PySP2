@@ -73,3 +73,47 @@ def central_difference(S, num_records=None, normalize=True):
 
     return xr.Dataset(dSdt)
 
+
+def plot_normalized_derivative(ds, record_no, chn=0):
+    """
+    Plots the normalized derivative of the scattering signal for a given record_no and channel.
+
+    Parameters
+    ----------
+    ds: xarray Dataset
+        The dataset containing the normalized derivative to plot.
+    record_no: int
+        The record number to plot.
+    chn: int
+        The channel number to plot (0 or 4).
+    Returns
+    -------
+    ax: matplotlib Axes
+        The axes object containing the plot.
+    """
+    import matplotlib.pyplot as plt
+
+    if chn not in [0, 4]:
+        raise ValueError("Channel number must be 0 or 4.")
+    
+    spectra = ds.isel(event_index=record_no)
+    time = spectra['time'].values
+    inp_data = {}
+    inp_data['time'] = xr.DataArray(np.array(time[np.newaxis]),
+                                    dims=['time'])
+    inp_data['Data_ch' + str(chn)] = xr.DataArray(
+        spectra['Data_ch' + str(chn)].values[np.newaxis, :],
+        dims=['time', 'bins'])
+    inp_data = xr.Dataset(inp_data)
+    bins = np.linspace(0, 100, 100)
+
+    ch_name = f'Data_ch{chn}'
+    plt.figure(figsize=(10, 6))
+    ax = plt.gca()
+    inp_data[ch_name].plot(ax=ax)
+    ax.set_title(f'Normalized Derivative of Scattering Signal - Channel {chn} Record {record_no}')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Normalized Derivative')
+    plt.grid()
+
+    return ax
