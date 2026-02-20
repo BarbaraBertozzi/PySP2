@@ -38,6 +38,8 @@ def calc_diams_masses(input_ds, debug=True, factor=1.0, Globals=None, leo_fits=F
     rejectFtPosTotal = 0
     if Globals is None:
         Globals = DMTGlobals()
+        print('Warning: Using DMTGlobal as default. To avoid this warning, \
+              define Globals!=None as input variable to function call calc_diams_massess()')
     if leo_fits:
         input_ds = beam_shape(input_ds, beam_position_from='split point', Globals=Globals)
         input_ds = leo_fit(input_ds, Globals=Globals)
