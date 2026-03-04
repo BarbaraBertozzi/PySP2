@@ -43,16 +43,22 @@ def write_dat(ds, file_name):
                    "IncanRatioch5ch6", "IncanPkOffsetch5ch6",
                    "IncanRatioch1ch2", "IncanPkOffsetch1ch2",
                    "ScatRejectKey", "IncanRejectKey", "OneofEvery", 
-                   "DeadtimeRelativeBias", "leo_AmpFactor_ch0",
+                   "DeadtimeRelativeBias" , "leo_AmpFactor_ch0",
                    "leo_AmpFactor_ch4", "leo_PkFWHM_ch0", "leo_PkFWHM_ch4",
                    "leo_PkPos_ch0", "leo_PkPos_ch4", "leo_EndPos_ch0", 
                    "leo_EndPos_ch4", "leo_FtAmp_ch0", "leo_FtAmp_ch4", 
                    "leo_Base_ch0", "leo_Base_ch4", "leo_ScatDiaSO4"]
+
     drop_list = []
     for varname in ds.variables.keys():
         if varname not in index_label:
             drop_list.append(varname)
-
+    drop_list_2 = []
+    for varname in index_label:
+        if varname not in ds.variables.keys():
+            drop_list_2.append(varname)
+    [index_label.remove(varname) for varname in drop_list_2]
+    
     smaller_ds = ds.drop(drop_list)
     pandas_ds = smaller_ds.to_dataframe()
     sp2_header = ["Instrument Type=SP2\n", "****\n"]
