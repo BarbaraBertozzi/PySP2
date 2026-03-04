@@ -53,13 +53,8 @@ def write_dat(ds, file_name):
     for varname in ds.variables.keys():
         if varname not in index_label:
             drop_list.append(varname)
-    drop_list_2 = []
-    for varname in index_label:
-        if varname not in ds.variables.keys():
-            drop_list_2.append(varname)
-    [index_label.remove(varname) for varname in drop_list_2]
-    
-    smaller_ds = ds.drop(drop_list)
+
+    smaller_ds = ds[index_label]
     pandas_ds = smaller_ds.to_dataframe()
     sp2_header = ["Instrument Type=SP2\n", "****\n"]
     pandas_ds['TimeWave'] = pandas_ds['TimeWave'].map(lambda x: "%.16g" % x)
