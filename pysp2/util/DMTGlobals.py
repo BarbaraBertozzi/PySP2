@@ -72,15 +72,13 @@ class DMTGlobals(object):
         self.IncanMaxPeakRatio = 25
         self.IncanMaxPeakOffset = 11
         # Default values are for Brookhaven SP2, unit  # 24 - 2010-11-17 - RS
-        #  mass(fg) = c0Mass1 + c1Mass1 * PkHt_ch1 + c2Mass1 * PkHt_ch1 ^ 2 + c3Mass1 * PkHt_ch1 ^ 3 - High - gain
+        #  mass(fg) = c0Mass1 + c1Mass1 * PkHt_ch1 + c2Mass1 * PkHt_ch1 ^ 2 - High - gain
         self.c0Mass1 = 0
         self.c1Mass1 = 0.0001896
         self.c2Mass1 = 0
-        self.c3Mass1 = 0
         self.c0Mass2 = 0
         self.c1Mass2 = 0.0016815
         self.c2Mass2 = 0
-        self.c3Mass2 = 0
         self.c0Scat1 = 0
         self.c1Scat1 = 78.141
         self.c2Scat1 = 0
