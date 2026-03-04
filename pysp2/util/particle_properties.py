@@ -560,28 +560,25 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
                          'ScatNumEnsembleBC': ScatNumEnsembleBC,
                          'NumFracBC': NumFracBC})
     if leo_fits:
+        coords =  {'time': time, 'incand_bins': SpecSizeBins.values, 'leo_bins': SpecSizeBins.values}
         #Make the DataArray with differently named size dimensions 
-        leo_IncandScatNumEnsemble = xr.DataArray(leo_IncandScatNumEnsemble, dims=('time', 'incand_bins', 'leo_bins'))
+        leo_IncandScatNumEnsemble = xr.DataArray(leo_IncandScatNumEnsemble.astype(np.float32), 
+                                                 dims=('time', 'incand_bins', 'leo_bins'),
+                                                 coords=coords)
+                                                 
         leo_IncandScatNumEnsemble.attrs["long_name"] = "2D incandesence size (black carbon core) and leo size (shell) \
             number size distributions. Dimensions are (time,incandesence size, leo size)"
         leo_IncandScatNumEnsemble.attrs["standard_name"] = "2D core / shell size number size distributions"
         leo_IncandScatNumEnsemble.attrs["units"] = "cm-3 per bin"
-        
-        #Add new dimensions (xarray want's different dimension names although the dimensions are the 
-        #same)
-        IncandSizeBins = xr.DataArray(SpecSizeBins, dims=('incand_bins'))
-        IncandSizeBins.attrs["long_name"] = "Incandesence (core) size bin centers"
-        IncandSizeBins.attrs["standard_name"] = "particle_diameter"
-        IncandSizeBins.attrs["units"] = "um"
-        
-        LeoSizeBins = xr.DataArray(SpecSizeBins, dims=('leo_bins'))
-        LeoSizeBins.attrs["long_name"] = "Leo (shell) size bin centers"
-        LeoSizeBins.attrs["standard_name"] = "particle_diameter"
-        LeoSizeBins.attrs["units"] = "um"
-        
-        #add the dimensions to the Dataset
-        psd_ds = psd_ds.expand_dims(dim={'incand_bins': IncandSizeBins, 'leo_bins': LeoSizeBins})
+           
         #add the 2D (core,shell) variable 
         psd_ds['leo_IncandScatNumEnsemble'] = leo_IncandScatNumEnsemble
-
+        #explanation for the coordinates
+        psd_ds['incand_bins'] = psd_ds.leo_bins.assign_attrs(units="um",
+                                              standard_name="particle_diameter",
+                                              long_name="Incandesence (core) size bin centers")
+        psd_ds['leo_bins'] = psd_ds.leo_bins.assign_attrs(units="um",
+                                              standard_name="particle_diameter",
+                                              long_name="Leo (shell) size bin centers")
+        
     return psd_ds
