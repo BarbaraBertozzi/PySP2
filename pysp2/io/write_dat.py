@@ -43,7 +43,11 @@ def write_dat(ds, file_name):
                    "IncanRatioch5ch6", "IncanPkOffsetch5ch6",
                    "IncanRatioch1ch2", "IncanPkOffsetch1ch2",
                    "ScatRejectKey", "IncanRejectKey", "OneofEvery", 
-                   "DeadtimeRelativeBias"]
+                   "DeadtimeRelativeBias", "leo_AmpFactor_ch0",
+                   "leo_AmpFactor_ch4", "leo_PkFWHM_ch0", "leo_PkFWHM_ch4",
+                   "leo_PkPos_ch0", "leo_PkPos_ch4", "leo_EndPos_ch0", 
+                   "leo_EndPos_ch4", "leo_FtAmp_ch0", "leo_FtAmp_ch4", 
+                   "leo_Base_ch0", "leo_Base_ch4", "leo_ScatDiaSO4"]
     drop_list = []
     for varname in ds.variables.keys():
         if varname not in index_label:
