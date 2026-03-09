@@ -49,7 +49,7 @@ def write_dat(ds, file_name):
     for varname in ds.variables.keys():
         if varname not in index_label:
             drop_list.append(varname)
-    print(drop_list)
+
     smaller_ds = ds.drop(drop_list)
     pandas_ds = smaller_ds.to_dataframe()
     sp2_header = ["Instrument Type=SP2\n", "****\n"]
