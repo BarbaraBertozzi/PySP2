@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 
-def central_difference(S, num_records=None, normalize=True):
+def central_difference(S, num_records=None, normalize=True, baseline_to_zero=True):
 
     """ 
     Compute fourth order derivative S'(t) using the 
@@ -39,6 +39,11 @@ def central_difference(S, num_records=None, normalize=True):
 
     for ch in channels:
         y = S[ch].isel(event_index=slice(0, num_records)).values
+
+        # Baseline shift: make each record's minimum be 0
+        if baseline_to_zero:
+            y_min = np.nanmin(y, axis=1, keepdims=True)   # shape (n_records, 1)
+            y = y - y_min
         d = np.full_like(y, np.nan, dtype=np.float64)
 
         # Interior points (vectorized)
