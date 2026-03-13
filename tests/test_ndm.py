@@ -1,6 +1,8 @@
 import pysp2
 import numpy as np
 
+from pysp2.util.normalized_derivative_method import MLEConfig
+
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
     my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)
@@ -22,4 +24,26 @@ def test_central_difference():
                                    7.166666666e7/-30152, decimal=2)
     np.testing.assert_almost_equal(dSdt_norm['Data_ch4'].isel(event_index=5876, time=19).item(), 
                                    1.5e7/-30132, decimal=2)
+    
+def test_mle_estimate_tau():
+    my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
+    my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)
+    my_binary = pysp2.util.gaussian_fit(my_sp2b, my_ini, parallel=False)
+    dSdt = pysp2.util.central_difference(my_binary, normalize=False, baseline_to_zero=True)
+    cfg = MLEConfig(
+    h=0.4e-6,           # example: 0.4 microseconds
+    sigma_bar=16.6,   # example; use your measured average width
+    delta_sigma=1.2,# example; use your measured width std dev
+    A1=0.37,
+    A2=1.6e-2,
+    A3=6.2e-4,
+)
+
+    #tau_hat = pysp2.util.mle_tau_moteki_kondo(my_binary, dSdt, 11, tau_grid=np.arange(-10, 10.1, 0.1), config=cfg)
+    #print(tau_hat)
+    
+    #np.testing.assert_almost_equal(tau_hat.isel(k=0).item(), -0.5, decimal=1)
+    #np.testing.assert_almost_equal(tau_hat.isel(k=10).item(), -0.5, decimal=1)
+    #np.testing.assert_almost_equal(tau_hat.isel(k=20).item(), -0.5, decimal=1)
+    #np.testing.assert_almost_equal(tau_hat.isel(k=30).item(), -0.5, decimal=1)
     
