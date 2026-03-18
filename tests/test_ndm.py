@@ -1,7 +1,8 @@
 import pysp2
 import numpy as np
+np.set_printoptions(threshold=np.inf)
 
-from pysp2.util.normalized_derivative_method import MLEConfig
+from pysp2.util.normalized_derivative_method import MLEConfig, mle_tau_moteki_kondo
 
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
@@ -28,8 +29,9 @@ def test_central_difference():
 def test_mle_estimate_tau():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
     my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)
-    my_binary = pysp2.util.gaussian_fit(my_sp2b, my_ini, parallel=False)
+    my_binary = pysp2.util.gaussian_fit(my_sp2b, my_ini, parallel=False, baseline_to_zero=True)
     dSdt = pysp2.util.central_difference(my_binary, normalize=False, baseline_to_zero=True)
+
     cfg = MLEConfig(
     h=0.4e-6,           # example: 0.4 microseconds
     sigma_bar=16.6,   # example; use your measured average width
@@ -38,8 +40,30 @@ def test_mle_estimate_tau():
     A2=1.6e-2,
     A3=6.2e-4,
 )
+    print("my_binary", my_binary)
+    print("my_binary time coordinates:", my_binary['time'].isel(event_index=499).values)
+    print("my_binary['Data_ch0'].isel(event_index=499).values", my_binary['Data_ch0'].isel(event_index=499).values)
+    print("time of max signal:", my_binary['Data_ch0'].isel(event_index=499).argmax().item())
 
-    #tau_hat = pysp2.util.mle_tau_moteki_kondo(my_binary, dSdt, 11, tau_grid=np.arange(-10, 10.1, 0.1), config=cfg)
+    # One event
+    tau_one = mle_tau_moteki_kondo(
+        S=my_binary["Data_ch0"],
+        norm_deriv=dSdt["Data_ch0"],
+        p=20,
+        event_index=499,
+        config=cfg,
+    )
+    print(tau_one)
+
+    # All events
+    #tau_all = mle_tau_moteki_kondo(
+    #    S=my_binary["Data_ch0"],
+    #    norm_deriv=dSdt["Data_ch0"],
+    #    p=11,
+    #    config=cfg,
+    #)
+    #tau_hat = pysp2.util.mle_tau_moteki_kondo(my_binary['Data_ch0'].isel(event_index=5876), dSdt['Data_ch0'].isel(event_index=5876), 
+    #                                          11, tau_grid=np.arange(-10, 10.1, 0.1), config=cfg)
     #print(tau_hat)
     
     #np.testing.assert_almost_equal(tau_hat.isel(k=0).item(), -0.5, decimal=1)

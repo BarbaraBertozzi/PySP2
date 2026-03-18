@@ -118,16 +118,21 @@ def plot_normalized_derivative(ds, record_no, chn=0):
         spectra['Data_ch' + str(chn)].values[np.newaxis, :],
         dims=['time', 'bins'])
     inp_data = xr.Dataset(inp_data)
-    bins = np.linspace(0, 100, 100)
+
+    bins = np.arange(0, 0.00004-0.3e-6, 0.4e-6)  # 0 to 0.0004 microseconds in steps of 0.4e-6 seconds
+    bins = bins*1e6  # convert to microseconds for plotting
 
     ch_name = f'Data_ch{chn}'
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
-    inp_data[ch_name].plot(ax=ax)
+    # Plot using bins for x-axis
+    ax.plot(bins, spectra['Data_ch' + str(chn)].values, label=ch_name)
+    ax.set_xlim([bins[0], bins[-1]])
     ax.set_title(f'Normalized Derivative of Scattering Signal - Channel {chn} Record {record_no}')
-    ax.set_xlabel('Time (s)')
+    ax.set_xlabel('Time ($\mu$s)')
     ax.set_ylabel('Normalized Derivative')
     plt.grid()
+    ax.legend()
 
     return ax
 
@@ -152,7 +157,10 @@ def mle_tau_moteki_kondo(
     norm_deriv: xr.DataArray,
     p: int,
     *,
-    dim: Optional[str] = None,
+    event_index: Optional[int] = None,
+    event_dim: str = "event_index",
+    S_sample_dim: Optional[str] = None,
+    y_sample_dim: Optional[str] = None,
     tau_grid: Optional[Union[np.ndarray, xr.DataArray]] = None,
     k_end: Optional[int] = None,
     config: Optional[MLEConfig] = None,
@@ -178,15 +186,21 @@ def mle_tau_moteki_kondo(
         Normalized derivative y(t) = S'(t)/S(t), same dimension/coords as S (or alignable).
     p : int
         Sub-array length (number of consecutive points) used for each k.
-    dim : str, optional
-        Name of the time dimension. If None, inferred as the only shared dimension.
-    tau_grid : array-like, optional
-        If provided, uses this global grid for tau for every k (in same units as t coordinate).
-        If None, a per-k grid is constructed around the local time range.
-    kend : int, optional
-        Max starting index k to evaluate. If None, kend = N - p.
-    config : MLEConfig, optional
-        Required parameters from Appendix A. If None, raises ValueError.
+    event_index : int, optional
+        If given, compute tau_hat only for this one event and return tau_hat(k).
+        If None, compute tau_hat for all events and return tau_hat(event_index, k).
+    event_dim : str, default "event_index"
+        Name of the event dimension.
+    S_sample_dim : str, optional
+        Sample dimension in S. If None, inferred as the non-event dimension.
+    y_sample_dim : str, optional
+        Sample dimension in norm_deriv. If None, inferred as the non-event dimension.
+    tau_grid : 1D array-like, optional
+        Global tau grid to use for all subsets. If None, a per-k grid is constructed.
+    k_end : int, optional
+        Largest starting k. If None, uses n_samples - p.
+    config : MLEConfig
+        Calibration / noise / grid settings.
 
     Returns
     -------
@@ -201,71 +215,53 @@ def mle_tau_moteki_kondo(
     - Currently supports 1D DataArrays along `dim`.
     """
     if config is None:
-        raise ValueError("config must be provided (contains h, sigma_bar, delta_sigma, A1..A3).")
+        raise ValueError("config must be provided.")
 
-    # Align inputs
-    S, norm_deriv = xr.align(S, norm_deriv, join="inner")
+    if event_dim not in S.dims:
+        raise ValueError(f"{event_dim!r} not found in S.dims={S.dims}")
+    if event_dim not in norm_deriv.dims:
+        raise ValueError(f"{event_dim!r} not found in norm_deriv.dims={norm_deriv.dims}")
 
-    # Infer dimension
-    if dim is None:
-        common_dims = list(set(S.dims).intersection(norm_deriv.dims))
-        if len(common_dims) != 1:
-            raise ValueError(f"Could not infer dim uniquely. Provide dim. Common dims: {common_dims}")
-        dim = common_dims[0]
+    # Infer sample dimensions
+    if S_sample_dim is None:
+        s_non_event_dims = [d for d in S.dims if d != event_dim]
+        if len(s_non_event_dims) != 1:
+            raise ValueError(
+                f"Could not infer S sample dim. Non-event dims in S: {s_non_event_dims}"
+            )
+        S_sample_dim = s_non_event_dims[0]
 
-    if dim not in S.dims:
-        raise ValueError(f"dim='{dim}' not found in S.dims={S.dims}")
-    if dim not in norm_deriv.dims:
-        raise ValueError(f"dim='{dim}' not found in norm_deriv.dims={norm_deriv.dims}")
+    if y_sample_dim is None:
+        y_non_event_dims = [d for d in norm_deriv.dims if d != event_dim]
+        if len(y_non_event_dims) != 1:
+            raise ValueError(
+                f"Could not infer norm_deriv sample dim. Non-event dims in norm_deriv: {y_non_event_dims}"
+            )
+        y_sample_dim = y_non_event_dims[0]
 
-    # Extract numpy arrays
-    y = np.asarray(norm_deriv.transpose(dim).data, dtype=float)
-    s = np.asarray(S.transpose(dim).data, dtype=float)
+    # Standardize dimension names internally
+    S_std = S.rename({S_sample_dim: "sample"})
+    y_std = norm_deriv.rename({y_sample_dim: "sample"})
 
-    if y.ndim != 1 or s.ndim != 1:
-        raise ValueError("This function currently supports 1D DataArrays along `dim`.")
-    if y.shape != s.shape:
-        raise ValueError(f"S and norm_deriv must have same length; got {s.shape} vs {y.shape}.")
+    # Align on event and sample positions
+    S_std, y_std = xr.align(S_std, y_std, join="inner")
 
-    n = y.size
-    if p < 2 or p > n:
-        raise ValueError(f"p must be in [2, {n}] but got {p}.")
+    if S_std.sizes["sample"] != y_std.sizes["sample"]:
+        raise ValueError("S and norm_deriv must have the same number of samples per event.")
+
+    n_events = S_std.sizes[event_dim]
+    n_samples = S_std.sizes["sample"]
+
+    if p < 2 or p > n_samples:
+        raise ValueError(f"p must be in [2, {n_samples}], got {p}")
 
     if k_end is None:
-        k_end = n - p
-    if k_end < 0 or k_end > n - p:
-        raise ValueError(f"k_end must be in [0, {n-p}] but got {k_end}.")
+        k_end = n_samples - p
+    if k_end < 0 or k_end > n_samples - p:
+        raise ValueError(f"k_end must be in [0, {n_samples - p}], got {k_end}")
 
-    # Time coordinate (must be numeric)
-    if dim not in S.coords:
-        t = np.arange(n, dtype=float)
-        t_units = None
-    else:
-        t = np.asarray(S[dim].data, dtype=float)
-        t_units = S[dim].attrs.get("units")
-
-    # Constants from Appendix A
-    h = float(config.h)
-    sigma_bar = float(config.sigma_bar)
-    delta_sigma = float(config.delta_sigma)
-    A1, A2, A3 = float(config.A1), float(config.A2), float(config.A3)
-
-    if h <= 0 or sigma_bar <= 0:
-        raise ValueError("h and sigma_bar must be positive.")
-    if delta_sigma < 0:
-        raise ValueError("delta_sigma must be >= 0.")
-
-    # Eq. (A.7): Af_d = sqrt(130)/12
-    Af_d = np.sqrt(130.0) / 12.0
-
-    # Eq. (A.6): deltaS_i
-    # deltaS_i = sqrt(A1^2 + A2^2 S_i + A3^2 S_i^2)
-    # Note: if S can be negative in your data, consider preprocessing upstream (paper doesn't specify clipping).
-    deltaS = np.sqrt(A1 * A1 + (A2 * A2) * s + (A3 * A3) * (s * s))
-
-    # Random variance term in Var[y_i], Eq. (A.10b) using Eq. (A.7)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        var_rand = (Af_d * Af_d) / (h * h) * (deltaS * deltaS) / (s * s)
+    # Use sample index as t-axis
+    t = np.arange(n_samples, dtype=float)
 
     # Optional global tau grid
     if tau_grid is not None:
@@ -278,18 +274,44 @@ def mle_tau_moteki_kondo(
     else:
         tau_grid_np = None
 
-    tau_hat = np.full(k_end + 1, np.nan, dtype=float)
+    # Constants from Appendix A
+    h = float(config.h)
+    sigma_bar = float(config.sigma_bar)
+    delta_sigma = float(config.delta_sigma)
+    A1, A2, A3 = float(config.A1), float(config.A2), float(config.A3)
 
-    def _logL_for_tau(yk: np.ndarray, tk: np.ndarray, var_rand_k: np.ndarray, tau: float) -> float:
+    if h <= 0:
+        raise ValueError("config.h must be positive.")
+    if sigma_bar <= 0:
+        raise ValueError("config.sigma_bar must be positive.")
+    if delta_sigma < 0:
+        raise ValueError("config.delta_sigma must be >= 0.")
+
+    Af_d = np.sqrt(130.0) / 12.0  # Eq. (A.7)
+
+    def _logL_for_tau(yk: np.ndarray, sk: np.ndarray, tk: np.ndarray, tau: float) -> float:
         """
         Compute log L_k(tau) for one subset (k) and one candidate tau, per Eq. (A.9).
         Uses Cholesky factorization for stability.
         """
-        # Mean vector (Eq. A.4)
+
+        # Eq. (A.4)
         ybar = -(tk - tau) / (sigma_bar * sigma_bar)
 
-        # Covariance matrix (Eqs. A.10a,b)
-        dt = (tk - tau).reshape(-1, 1)  # (p,1)
+        # Eq. (A.6)
+        deltaS = np.sqrt(A1 * A1 + (A2 * A2) * sk + (A3 * A3) * (sk * sk))
+
+        # Eq. (A.10b) random term, using Eq. (A.7)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            var_rand_k = (Af_d * Af_d) / (h * h) * (deltaS * deltaS) / (sk * sk)
+
+        if not np.all(np.isfinite(var_rand_k)):
+            return -np.inf
+        if np.any(var_rand_k <= 0):
+            return -np.inf
+
+        # Eqs. (A.10a,b)
+        dt = (tk - tau).reshape(-1, 1)
         sys_pref = 4.0 * (delta_sigma * delta_sigma) / (sigma_bar ** 6)
         Sigma = sys_pref * (dt @ dt.T)
         Sigma[np.diag_indices_from(Sigma)] += var_rand_k
@@ -301,52 +323,89 @@ def mle_tau_moteki_kondo(
         except np.linalg.LinAlgError:
             return -np.inf
 
-        # d2 = r^T Sigma^{-1} r via triangular solves
         z = np.linalg.solve(L, r)
         d2 = float(z.T @ z)
-
-        # log|Sigma|
         logdet = 2.0 * np.sum(np.log(np.diag(L)))
-
         p_local = yk.size
+
         return float(-0.5 * (p_local * np.log(2.0 * np.pi) + logdet + d2))
 
-    for k in range(k_end + 1):
-        yk = y[k : k + p]
-        tk = t[k : k + p]
-        var_rand_k = var_rand[k : k + p]
+    def _tau_hat_for_one_event(s_event: np.ndarray, y_event: np.ndarray) -> np.ndarray:
+        """Return tau_hat(k) for a single event."""
+        tau_hat = np.full(k_end + 1, np.nan, dtype=float)
 
-        # Basic sanity checks
-        if not (np.all(np.isfinite(yk)) and np.all(np.isfinite(tk)) and np.all(np.isfinite(var_rand_k))):
-            continue
-        if np.any(var_rand_k <= 0):
-            continue
+        if not (np.all(np.isfinite(s_event)) and np.all(np.isfinite(y_event))):
+            return tau_hat
 
-        # Per-k grid if not provided
-        if tau_grid_np is None:
-            span = float(tk[-1] - tk[0])
-            margin = config.grid_margin * (span + h)
-            grid = np.linspace(tk[0] - margin, tk[-1] + margin, config.grid_size)
-        else:
-            grid = tau_grid_np
+        for k in range(k_end + 1):
+            yk = y_event[k:k + p]
+            sk = s_event[k:k + p]
+            tk = t[k:k + p]
 
-        best_ll = -np.inf
-        best_tau = np.nan
+            if not (np.all(np.isfinite(yk)) and np.all(np.isfinite(sk))):
+                continue
 
-        for tau_cand in grid:
-            ll = _logL_for_tau(yk, tk, var_rand_k, float(tau_cand))
-            if ll > best_ll:
-                best_ll = ll
-                best_tau = float(tau_cand)
+            if tau_grid_np is None:
+                span = float(tk[-1] - tk[0])
+                margin = config.grid_margin * (span + h)
+                grid = np.linspace(tk[0] - margin, tk[-1] + margin, config.grid_size)
+            else:
+                grid = tau_grid_np
 
-        if np.isfinite(best_ll):
-            tau_hat[k] = best_tau
+            best_ll = -np.inf
+            best_tau = np.nan
 
-    # Return as DataArray
-    k_coord = xr.DataArray(np.arange(k_end + 1), dims=("k",), name="k")
-    out = xr.DataArray(tau_hat, dims=("k",), coords={"k": k_coord}, name="tau_hat")
-    out.attrs["long_name"] = "MLE estimate of tau for each k-subset"
-    if t_units:
-        out.attrs["units"] = t_units
+            for tau_cand in grid:
+                ll = _logL_for_tau(yk, sk, tk, float(tau_cand))
+                if ll > best_ll:
+                    best_ll = ll
+                    best_tau = float(tau_cand)
 
+            if np.isfinite(best_ll):
+                tau_hat[k] = best_tau
+
+        return tau_hat
+
+    # Compute one event only
+    if event_index is not None:
+        s_event = np.asarray(S_std.sel({event_dim: event_index}).data, dtype=float)
+        y_event = np.asarray(y_std.sel({event_dim: event_index}).data, dtype=float)
+
+        tau_hat_1d = _tau_hat_for_one_event(s_event, y_event)
+
+        out = xr.DataArray(
+            tau_hat_1d,
+            dims=("k",),
+            coords={"k": np.arange(k_end + 1)},
+            name="tau_hat",
+        )
+        out.attrs["long_name"] = f"MLE tau_hat(k) for {event_dim}={event_index}"
+        out.attrs["units"] = "sample_index"
+        return out
+
+    # Compute all events
+    tau_hat_all = np.full((n_events, k_end + 1), np.nan, dtype=float)
+
+    event_vals = (
+        S_std[event_dim].values
+        if event_dim in S_std.coords
+        else np.arange(n_events)
+    )
+
+    for i in range(n_events):
+        s_event = np.asarray(S_std.isel({event_dim: i}).data, dtype=float)
+        y_event = np.asarray(y_std.isel({event_dim: i}).data, dtype=float)
+        tau_hat_all[i, :] = _tau_hat_for_one_event(s_event, y_event)
+
+    out = xr.DataArray(
+        tau_hat_all,
+        dims=(event_dim, "k"),
+        coords={
+            event_dim: event_vals,
+            "k": np.arange(k_end + 1),
+        },
+        name="tau_hat",
+    )
+    out.attrs["long_name"] = "MLE tau_hat(event_index, k)"
+    out.attrs["units"] = "sample_index"
     return out
