@@ -34,26 +34,27 @@ def test_mle_estimate_tau():
 
     cfg = MLEConfig(
     h=0.4e-6,           # example: 0.4 microseconds
-    sigma_bar=16.6,   # example; use your measured average width
-    delta_sigma=1.2,# example; use your measured width std dev
+    sigma_bar=26.28*0.4e-6,   # example; use your measured average width
+    delta_sigma=1.2*0.4e-6,# example; use your measured width std dev
     A1=0.37,
     A2=1.6e-2,
     A3=6.2e-4,
 )
-    print("my_binary", my_binary)
-    print("my_binary time coordinates:", my_binary['time'].isel(event_index=499).values)
-    print("my_binary['Data_ch0'].isel(event_index=499).values", my_binary['Data_ch0'].isel(event_index=499).values)
-    print("time of max signal:", my_binary['Data_ch0'].isel(event_index=499).argmax().item())
-
+    
     # One event
     tau_one = mle_tau_moteki_kondo(
-        S=my_binary["Data_ch0"],
-        norm_deriv=dSdt["Data_ch0"],
-        p=20,
+        S=my_binary,
+        norm_deriv=dSdt,
+        p=21,
+        data_var="Data_ch0",
         event_index=499,
         config=cfg,
     )
-    print(tau_one)
+
+    tau_val = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6
+    # Test that the estimated tau for a subset of results is close to the true value for the event
+    for i in range(33, 37):
+        np.testing.assert_almost_equal(tau_one[i], tau_val, decimal=6)
 
     # All events
     #tau_all = mle_tau_moteki_kondo(
@@ -62,12 +63,4 @@ def test_mle_estimate_tau():
     #    p=11,
     #    config=cfg,
     #)
-    #tau_hat = pysp2.util.mle_tau_moteki_kondo(my_binary['Data_ch0'].isel(event_index=5876), dSdt['Data_ch0'].isel(event_index=5876), 
-    #                                          11, tau_grid=np.arange(-10, 10.1, 0.1), config=cfg)
-    #print(tau_hat)
-    
-    #np.testing.assert_almost_equal(tau_hat.isel(k=0).item(), -0.5, decimal=1)
-    #np.testing.assert_almost_equal(tau_hat.isel(k=10).item(), -0.5, decimal=1)
-    #np.testing.assert_almost_equal(tau_hat.isel(k=20).item(), -0.5, decimal=1)
-    #np.testing.assert_almost_equal(tau_hat.isel(k=30).item(), -0.5, decimal=1)
     
