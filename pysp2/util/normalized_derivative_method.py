@@ -154,7 +154,7 @@ def mle_tau_moteki_kondo(
     norm_deriv: Union[xr.DataArray, xr.Dataset],
     p: int,
     *,
-    data_var: Optional[str] = None,
+    ch: Optional[str] = None,
     event_index: Optional[int] = None,
     event_dim: str = "event_index",
     S_sample_dim: Optional[str] = None,
@@ -174,7 +174,7 @@ def mle_tau_moteki_kondo(
         Normalized derivative.
     p : int
         Number of consecutive points in each k-subset.
-    data_var : str, optional
+    ch : str, optional
         Variable to select when S and/or norm_deriv are Datasets.
         Required if a Dataset contains multiple variables and no unique choice exists.
     event_index : int, optional
@@ -200,18 +200,18 @@ def mle_tau_moteki_kondo(
         if isinstance(obj, xr.DataArray):
             return obj
         if isinstance(obj, xr.Dataset):
-            if data_var is not None:
-                if data_var not in obj.data_vars:
+            if ch is not None:
+                if ch not in obj.chs:
                     raise ValueError(
-                        f"{data_var!r} not found in {name}.data_vars={list(obj.data_vars)}"
+                        f"{ch!r} not found in {name}.chs={list(obj.chs)}"
                     )
-                return obj[data_var]
-            if len(obj.data_vars) == 1:
-                only_var = next(iter(obj.data_vars))
+                return obj[ch]
+            if len(obj.chs) == 1:
+                only_var = next(iter(obj.chs))
                 return obj[only_var]
             raise ValueError(
                 f"{name} is a Dataset with multiple variables. "
-                f"Provide data_var. Available: {list(obj.data_vars)}"
+                f"Provide ch. Available: {list(obj.chs)}"
             )
         raise TypeError(f"{name} must be an xarray DataArray or Dataset.")
 
