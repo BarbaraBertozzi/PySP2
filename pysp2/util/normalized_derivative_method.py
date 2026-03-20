@@ -148,14 +148,13 @@ class MLEConfig:
     grid_size: int = 401
     grid_margin: float = 0.5
 
-
 def mle_tau_moteki_kondo(
     S: Union[xr.DataArray, xr.Dataset],
     norm_deriv: Union[xr.DataArray, xr.Dataset],
     p: int,
     *,
     ch: Optional[str] = None,
-    event_index: Optional[int] = None,
+    event_index: int,
     event_dim: str = "event_index",
     S_sample_dim: Optional[str] = None,
     y_sample_dim: Optional[str] = None,
@@ -177,9 +176,8 @@ def mle_tau_moteki_kondo(
     ch : str, optional
         Variable to select when S and/or norm_deriv are Datasets.
         Required if a Dataset contains multiple variables and no unique choice exists.
-    event_index : int, optional
-        If given, return tau_hat(k) for one event.
-        If None, return tau_hat(event_index, k) for all events.
+    event_index : int
+        Event index to select. This function returns tau_hat(k) for one event only.
     event_dim : str
         Name of event dimension.
     S_sample_dim : str, optional
@@ -208,15 +206,15 @@ def mle_tau_moteki_kondo(
                 # Use the user input channel.
                 if ch not in obj.data_vars:
                     raise ValueError(
-                        f"{ch!r} not found in {name}.chs={list(obj.chs)}"
+                        f"{ch!r} not found in {name}.data_vars={list(obj.data_vars)}"
                     )
                 return obj[ch]
-            if len(obj.chs) == 1:
-                only_var = next(iter(obj.chs))
+            if len(obj.data_vars) == 1:
+                only_var = next(iter(obj.data_vars))
                 return obj[only_var]
             raise ValueError(
                 f"{name} is a Dataset with multiple variables. "
-                f"Provide ch. Available: {list(obj.chs)}"
+                f"Provide ch. Available: {list(obj.data_vars)}"
             )
         raise TypeError(f"{name} must be an xarray DataArray or Dataset.")
 
@@ -254,7 +252,11 @@ def mle_tau_moteki_kondo(
     # Align the arrays so the same event/sample positions are used in both inputs.
     S_std, y_std = xr.align(S_std, y_std, join="inner")
 
-    n_events = S_std.sizes[event_dim]
+    if event_index < 0 or event_index >= S_std.sizes[event_dim]:
+        raise ValueError(
+            f"event_index must be in [0, {S_std.sizes[event_dim] - 1}], got {event_index}"
+        )
+
     n_samples = S_std.sizes["sample"]
 
     if p < 2 or p > n_samples:
@@ -282,7 +284,7 @@ def mle_tau_moteki_kondo(
     sigma_bar = float(config.sigma_bar)
     delta_sigma = float(config.delta_sigma)
     A1, A2, A3 = float(config.A1), float(config.A2), float(config.A3)
-    
+
     # Time axis used in the fit.
     # Here we use physical time spacing h so tk is in seconds (or whatever unit h uses).
     # This must match sigma_bar and delta_sigma units.
@@ -375,9 +377,9 @@ def mle_tau_moteki_kondo(
             # Consecutive p-point subset starting at k.
             # This is the subset over which Moteki & Kondo search for the leading-edge
             # segment that best matches I'/I [Appendix A.5].
-            yk = y_event[k:k + p]
-            sk = s_event[k:k + p]
-            tk = t[k:k + p]
+            yk = y_event[k : k + p]
+            sk = s_event[k : k + p]
+            tk = t[k : k + p]
 
             if not (np.all(np.isfinite(yk)) and np.all(np.isfinite(sk))):
                 continue
@@ -404,40 +406,19 @@ def mle_tau_moteki_kondo(
 
         return tau_hat
 
-    # If a single event index is requested, return tau_hat(k) for that event only.
-    if event_index is not None:
-        s_event = np.asarray(S_std.sel({event_dim: event_index}).values, dtype=float)
-        y_event = np.asarray(y_std.sel({event_dim: event_index}).values, dtype=float)
+    # Select the requested event only, and return tau_hat(k) for that one event.
+    s_event = np.asarray(S_std.sel({event_dim: event_index}).values, dtype=float)
+    y_event = np.asarray(y_std.sel({event_dim: event_index}).values, dtype=float)
 
-        tau_hat_1d = _tau_hat_for_one_event(s_event, y_event)
-
-        return xr.DataArray(
-            tau_hat_1d,
-            dims=("k",),
-            coords={"k": np.arange(k_end + 1)},
-            name="tau_hat",
-            attrs={"long_name": f"MLE tau_hat(k) for {event_dim}={event_index}",
-                   "units": "sample_index"},
-        )
-
-    # Otherwise compute tau_hat(event_index, k) for all events.
-    tau_hat_all = np.full((n_events, k_end + 1), np.nan, dtype=float)
-
-    event_vals = (
-        S_std[event_dim].values
-        if event_dim in S_std.coords
-        else np.arange(n_events)
-    )
-
-    for i in range(n_events):
-        s_event = np.asarray(S_std.isel({event_dim: i}).values, dtype=float)
-        y_event = np.asarray(y_std.isel({event_dim: i}).values, dtype=float)
-        tau_hat_all[i, :] = _tau_hat_for_one_event(s_event, y_event)
+    tau_hat_1d = _tau_hat_for_one_event(s_event, y_event)
 
     return xr.DataArray(
-        tau_hat_all,
-        dims=(event_dim, "k"),
-        coords={event_dim: event_vals, "k": np.arange(k_end + 1)},
+        tau_hat_1d,
+        dims=("k",),
+        coords={"k": np.arange(k_end + 1)},
         name="tau_hat",
-        attrs={"long_name": "MLE tau_hat(event_index, k)", "units": "sample_index"},
+        attrs={
+            "long_name": f"MLE tau_hat(k) for {event_dim}={event_index}",
+            "units": "sample_index_or_time_units_of_t",
+        },
     )
