@@ -69,12 +69,4 @@ def test_mle_estimate_tau():
     # Test that the estimated tau for a subset of results is close to the true value for the event
     for i in range(23, 38):
         np.testing.assert_almost_equal(tau_one[i], tau_val, decimal=6)
-
-    # All events
-    #tau_all = mle_tau_moteki_kondo(
-    #    S=my_binary["Data_ch0"],
-    #    norm_deriv=dSdt["Data_ch0"],
-    #    p=11,
-    #    config=cfg,
-    #)
     
