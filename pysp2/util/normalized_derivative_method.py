@@ -201,7 +201,7 @@ def mle_tau_moteki_kondo(
             return obj
         if isinstance(obj, xr.Dataset):
             if ch is not None:
-                if ch not in obj.chs:
+                if ch not in obj.data_vars:
                     raise ValueError(
                         f"{ch!r} not found in {name}.chs={list(obj.chs)}"
                     )

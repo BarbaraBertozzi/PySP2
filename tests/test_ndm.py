@@ -41,19 +41,33 @@ def test_mle_estimate_tau():
     A3=6.2e-4,
 )
     
-    # One event
+    ## Test one event
     tau_one = mle_tau_moteki_kondo(
         S=my_binary,
         norm_deriv=dSdt,
         p=21,
-        data_var="Data_ch0",
+        ch="Data_ch0",
         event_index=499,
         config=cfg,
     )
-
     tau_val = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6
     # Test that the estimated tau for a subset of results is close to the true value for the event
-    for i in range(33, 37):
+    for i in range(21, 37):
+        np.testing.assert_almost_equal(tau_one[i], tau_val, decimal=6)
+
+    ## Test another event
+    tau_one = mle_tau_moteki_kondo(
+        S=my_binary,
+        norm_deriv=dSdt,
+        p=21,
+        ch="Data_ch0",
+        event_index=1040,
+        config=cfg,
+    )
+
+    tau_val = my_binary['Data_ch0'].isel(event_index=1040).argmax().item()*0.4e-6
+    # Test that the estimated tau for a subset of results is close to the true value for the event
+    for i in range(23, 38):
         np.testing.assert_almost_equal(tau_one[i], tau_val, decimal=6)
 
     # All events
