@@ -179,10 +179,14 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     
     #moving average of the beam shape with a window of moving_average_window
     moving_ch0_profile_window = np.lib.stride_tricks.sliding_window_view(my_ch0_profiles, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch0)), 
+                                                                     axis=0)
     moving_avg_ch0_profiles_ = np.nanmedian(moving_ch0_profile_window,axis=2)
     moving_ch4_profile_window = np.lib.stride_tricks.sliding_window_view(my_ch4_profiles, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch4)), 
+                                                                     axis=0)
     moving_avg_ch4_profiles_ = np.nanmedian(moving_ch4_profile_window,axis=2)
     
     moving_avg_ch0_profiles = np.zeros_like(moving_avg_ch0_profiles_) * np.nan
