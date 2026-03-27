@@ -199,6 +199,8 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     for i in range(moving_avg_ch0_profiles_.shape[0]):
         i_profile = moving_avg_ch0_profiles_[i,:]
         i_max = np.nanargmax(i_profile)
+        if i_max < num_base_pts_2_avg:
+            continue
         i_range = i_profile[i_max] - np.nanmin(i_profile[:i_max])
         moving_avg_ch0_profiles[i,:] =  (i_profile - np.nanmin(i_profile[:i_max])) / i_range
         #interpolate here to get the exact position in fraction (not integer) :: which posiiton (float) is the 0.03 cross in
@@ -212,6 +214,8 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     for i in range(moving_avg_ch4_profiles_.shape[0]):
         i_profile = moving_avg_ch4_profiles_[i,:]
         i_max = np.nanargmax(i_profile)
+        if i_max < num_base_pts_2_avg:
+            continue
         i_range = i_profile[i_max] - np.nanmin(i_profile[:i_max])
         moving_avg_ch4_profiles[i,:] =  (i_profile - np.nanmin(i_profile[:i_max])) / i_range
         #interpolate here to get the exact position in fraction (not integer) :: which posiiton (float) is the 0.03 cross in
