@@ -321,6 +321,10 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
                                                   np.nan, output_ds['leo_EndPos_ch0'].values)
     output_ds['leo_EndPos_ch4'].values = np.where(output_ds['leo_EndPos_ch4'].values < num_base_pts_2_avg,
                                                   np.nan, output_ds['leo_EndPos_ch4'].values)
+    output_ds['leo_EndPos_ch0'].values = np.where(output_ds['leo_EndPos_ch0'].values > Globals.ScatMaxPeakPos,
+                                                  np.nan, output_ds['leo_EndPos_ch0'].values)
+    output_ds['leo_EndPos_ch4'].values = np.where(output_ds['leo_EndPos_ch4'].values > Globals.ScatMaxPeakPos,
+                                                  np.nan, output_ds['leo_EndPos_ch4'].values)
         
     output_ds['leo_PkFWHM_ch0'] = output_ds['leo_PkFWHM_ch0'].interpolate_na(dim="event_index", 
                                                         method="nearest", fill_value="extrapolate")
