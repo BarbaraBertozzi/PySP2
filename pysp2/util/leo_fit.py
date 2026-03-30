@@ -247,9 +247,11 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
 
     #moving average of beam width
     moving_ch0_beam_width = np.lib.stride_tricks.sliding_window_view(my_ch0_scatterers['PkFWHM_ch0'].values, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch0)), axis=0)
     moving_ch4_beam_width = np.lib.stride_tricks.sliding_window_view(my_ch4_scatterers['PkFWHM_ch4'].values, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch4)), axis=0)
     moving_median_ch0_beam_width = np.nanmedian(moving_ch0_beam_width,axis=1)
     moving_median_ch4_beam_width = np.nanmedian(moving_ch4_beam_width,axis=1)
         
