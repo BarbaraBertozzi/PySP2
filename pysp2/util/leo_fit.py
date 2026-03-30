@@ -257,9 +257,11 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
         
     #Moving cross to centre (c2c)
     moving_ch0_c2c = np.lib.stride_tricks.sliding_window_view(ch0_c2c, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch0)), axis=0)
     moving_ch4_c2c = np.lib.stride_tricks.sliding_window_view(ch4_c2c, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch4)), axis=0)
 
     moving_median_ch0_c2c = np.nanmedian(moving_ch0_c2c,axis=1)
     moving_median_ch4_c2c = np.nanmedian(moving_ch4_c2c,axis=1)
