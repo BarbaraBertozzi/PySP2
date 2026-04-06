@@ -139,6 +139,29 @@ def plot_normalized_derivative(ds, record_no, chn=0):
 
 @dataclass(frozen=True)
 class MLEConfig:
+    """
+    Configuration parameters for Maximum Likelihood Estimation (MLE)
+    of the Moteki & Kondo normalized derivative method.
+
+    Parameters
+    ----------
+    h : float
+        Time resolution of the scattering signal (instrument specification).
+    sigma_bar : float
+        Mean value of the noise standard deviation (measured value).
+    delta_sigma : float
+        Increment for the noise standard deviation (measured value).
+    A1 : float
+        Coefficient for the first term in the model (determined experimentally).
+    A2 : float
+        Coefficient for the second term in the model (determined experimentally).
+    A3 : float
+        Coefficient for the third term in the model (determined experimentally).
+    grid_size : int, default=401
+        Number of grid points for tau estimation.
+    grid_margin : float, default=0.5
+        Margin for the tau grid as a fraction of the range.
+    """
     h: float
     sigma_bar: float
     delta_sigma: float
