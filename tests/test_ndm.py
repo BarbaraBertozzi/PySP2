@@ -2,7 +2,7 @@ import pysp2
 import numpy as np
 np.set_printoptions(threshold=np.inf)
 
-from pysp2.util.normalized_derivative_method import MLEConfig, mle_tau_moteki_kondo
+from pysp2.util.normalized_derivative_method import MLEConfig, mle_tau_moteki_kondo, compute_d2_moteki_kondo
 
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
@@ -54,6 +54,17 @@ def test_mle_estimate_tau():
     # Test that the estimated tau for a subset of results is close to the true value for the event
     for i in range(21, 37):
         np.testing.assert_almost_equal(tau[i], tau_val, decimal=6)
+    
+    d2 = compute_d2_moteki_kondo(
+    S=my_binary,
+    norm_deriv=dSdt,
+    tau_hat=tau,
+    p=21,
+    ch="Data_ch0",
+    event_index=499,
+    config=cfg,
+    )
+    print(d2)
 
     ## Test another event
     tau = mle_tau_moteki_kondo(
