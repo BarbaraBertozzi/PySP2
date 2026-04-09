@@ -171,6 +171,106 @@ class MLEConfig:
     grid_size: int = 401
     grid_margin: float = 0.5
 
+def _to_dataarray(
+    obj: Union[xr.DataArray, xr.Dataset],
+    name: str,
+    ch: Optional[str] = None,
+) -> xr.DataArray:
+    """
+    Accept either a DataArray or Dataset.
+    If a Dataset is provided, select the variable named `ch`.
+    """
+    if isinstance(obj, xr.DataArray):
+        return obj
+
+    if isinstance(obj, xr.Dataset):
+        if ch is not None:
+            # Use the user input channel.
+            if ch not in obj.data_vars:
+                raise ValueError(
+                    f"{ch!r} not found in {name}.data_vars={list(obj.data_vars)}"
+                )
+            return obj[ch]
+
+        if len(obj.data_vars) == 1:
+            only_var = next(iter(obj.data_vars))
+            return obj[only_var]
+
+        raise ValueError(
+            f"{name} is a Dataset with multiple variables. "
+            f"Provide ch. Available: {list(obj.data_vars)}"
+        )
+
+    raise TypeError(f"{name} must be an xarray DataArray or Dataset.")
+
+
+def _moteki_kondo_subset_statistics(
+    yk: np.ndarray,
+    sk: np.ndarray,
+    tk: np.ndarray,
+    tau: float,
+    *,
+    h: float,
+    sigma_bar: float,
+    delta_sigma: float,
+    A1: float,
+    A2: float,
+    A3: float,
+) -> tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray], Optional[float]]:
+    """
+    Shared Moteki & Kondo subset statistics.
+
+    Returns
+    -------
+    ybar : np.ndarray
+        Mean vector [Eq. (A.4)].
+    Sigma : np.ndarray
+        Covariance matrix [Eqs. (A.10a), (A.10b)].
+    L : np.ndarray or None
+        Cholesky factor of Sigma, if Sigma is positive definite.
+    d2 : float or None
+        Statistical distance squared [Eq. (A.11)].
+    """
+    # Mean vector of the normalized derivative under the Gaussian beam model.
+    # Eq. (A.4): ybar_i(tau) = -(t_i - tau) / sigma_bar^2
+    ybar = -(tk - tau) / (sigma_bar * sigma_bar)
+
+    # Signal-noise amplitude from Appendix A.
+    # Eq. (A.6): deltaS_i = sqrt(A1^2 + A2^2 S_i + A3^2 S_i^2)
+    deltaS = np.sqrt(A1 * A1 + (A2 * A2) * sk + (A3 * A3) * (sk * sk))
+
+    # Random variance in y = S'/S from finite-difference error propagation.
+    # Eq. (A.7): (delta y_i)_ran = Af_d * (1/h) * (1/S_i) * deltaS_i
+    Af_d = np.sqrt(130.0) / 12.0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        var_rand_k = (Af_d * Af_d) / (h * h) * (deltaS * deltaS) / (sk * sk)
+
+    if not np.all(np.isfinite(var_rand_k)):
+        return None, None, None, None
+    if np.any(var_rand_k <= 0):
+        return None, None, None, None
+
+    # Systematic covariance from particle-by-particle fluctuations in sigma.
+    # Eq. (A.10a): Cov[y_i, y_j] = 4/sigma_bar^6 * (t_i - tau)(t_j - tau) * delta_sigma^2
+    # Eq. (A.10b): Var[y_i] adds the random variance term above.
+    dt = (tk - tau).reshape(-1, 1)
+    sys_pref = 4.0 * (delta_sigma * delta_sigma) / (sigma_bar ** 6)
+    Sigma = sys_pref * (dt @ dt.T)
+    Sigma[np.diag_indices_from(Sigma)] += var_rand_k
+
+    r = yk - ybar
+
+    try:
+        L = np.linalg.cholesky(Sigma)
+    except np.linalg.LinAlgError:
+        return ybar, Sigma, None, None
+
+    # Eq. (A.11): d^2 = (y - ybar)^T Sigma^{-1} (y - ybar)
+    z = np.linalg.solve(L, r)
+    d2 = float(z.T @ z)
+
+    return ybar, Sigma, L, d2
+
 def mle_tau_moteki_kondo(
     S: Union[xr.DataArray, xr.Dataset],
     norm_deriv: Union[xr.DataArray, xr.Dataset],
@@ -217,33 +317,9 @@ def mle_tau_moteki_kondo(
     if config is None:
         raise ValueError("config must be provided.")
 
-    def _to_dataarray(obj: Union[xr.DataArray, xr.Dataset], name: str) -> xr.DataArray:
-        """
-        Accept either a DataArray or Dataset.
-        If a Dataset is provided, select the variable named `ch`.
-        """
-        if isinstance(obj, xr.DataArray):
-            return obj
-        if isinstance(obj, xr.Dataset):
-            if ch is not None:
-                # Use the user input channel.
-                if ch not in obj.data_vars:
-                    raise ValueError(
-                        f"{ch!r} not found in {name}.data_vars={list(obj.data_vars)}"
-                    )
-                return obj[ch]
-            if len(obj.data_vars) == 1:
-                only_var = next(iter(obj.data_vars))
-                return obj[only_var]
-            raise ValueError(
-                f"{name} is a Dataset with multiple variables. "
-                f"Provide ch. Available: {list(obj.data_vars)}"
-            )
-        raise TypeError(f"{name} must be an xarray DataArray or Dataset.")
-
     # Convert datasets to the selected DataArrays.
-    S = _to_dataarray(S, "S")
-    norm_deriv = _to_dataarray(norm_deriv, "norm_deriv")
+    S = _to_dataarray(S, "S", ch=ch)
+    norm_deriv = _to_dataarray(norm_deriv, "norm_deriv", ch=ch)
 
     # The method requires one event axis and one sample axis.
     if event_dim not in S.dims:
@@ -291,7 +367,7 @@ def mle_tau_moteki_kondo(
         raise ValueError(f"k_end must be in [0, {n_samples - p}], got {k_end}")
 
     # Optional tau grid for the 1D grid search in tau.
-    # Moteki & Kondo determine tau numerically by maximizing L_k(tau).
+    # Moteki & Kondo determine tau numerically by maximizing L_k(tau) [Appendix A.5].
     if tau_grid is not None:
         tau_grid_np = np.asarray(
             tau_grid.data if isinstance(tau_grid, xr.DataArray) else tau_grid,
@@ -311,7 +387,7 @@ def mle_tau_moteki_kondo(
     # Time axis used in the fit.
     # Here we use physical time spacing h so tk is in seconds (or whatever unit h uses).
     # This must match sigma_bar and delta_sigma units.
-    t = np.arange(n_samples) * h
+    t = np.arange(n_samples, dtype=float) * h
 
     if h <= 0:
         raise ValueError("config.h must be positive.")
@@ -319,72 +395,6 @@ def mle_tau_moteki_kondo(
         raise ValueError("config.sigma_bar must be positive.")
     if delta_sigma < 0:
         raise ValueError("config.delta_sigma must be >= 0.")
-
-    # Eq. (A.7): finite-difference amplification factor for the derivative noise.
-    Af_d = np.sqrt(130.0) / 12.0
-
-    def _logL_for_tau(yk: np.ndarray, sk: np.ndarray, tk: np.ndarray, tau: float) -> float:
-        """
-        Log-likelihood for one k-subset and one candidate tau.
-
-        Mean model:
-            ybar_i(tau) = -(t_i - tau) / sigma_bar^2      [Eq. (A.4)]
-        where y_i = S'_i / S_i.
-
-        Covariance:
-            Cov[y_i, y_j] = 4 / sigma_bar^6 * (t_i - tau)(t_j - tau) * (delta_sigma)^2   [Eq. (A.10a)]
-            Var[y_i]      = 4 / sigma_bar^6 * (t_i - tau)^2 * (delta_sigma)^2
-                            + (Af_d^2 / h^2) * (1/S_i^2) * (delta S_i)^2                  [Eq. (A.10b)]
-        with
-            delta S_i = sqrt(A1^2 + A2^2 S_i + A3^2 S_i^2)                               [Eq. (A.6)]
-        and
-            (delta y_i)_ran = Af_d * (1/h) * (1/S_i) * delta S_i                          [Eq. (A.7)]
-
-        The full likelihood is the multivariate Gaussian in Eq. (A.9).
-        """
-        # Mean vector of the normalized derivative under the Gaussian beam model.
-        # This is the line I'/I = -(t - tau)/sigma^2 [Eq. (5)] used as the mean [Eq. (A.4)].
-        ybar = -(tk - tau) / (sigma_bar * sigma_bar)
-
-        # Signal-noise amplitude from Appendix A [Eq. (A.6)].
-        deltaS = np.sqrt(A1 * A1 + (A2 * A2) * sk + (A3 * A3) * (sk * sk))
-
-        # Random variance of y = S'/S from finite-difference error propagation [Eq. (A.7)].
-        with np.errstate(divide="ignore", invalid="ignore"):
-            var_rand_k = (Af_d * Af_d) / (h * h) * (deltaS * deltaS) / (sk * sk)
-
-        # If any term is non-finite, this tau candidate is unusable.
-        if not np.all(np.isfinite(var_rand_k)):
-            return -np.inf
-        if np.any(var_rand_k <= 0):
-            return -np.inf
-
-        # Systematic covariance from particle-by-particle fluctuations in sigma [Eq. (A.10a)].
-        dt = (tk - tau).reshape(-1, 1)
-        sys_pref = 4.0 * (delta_sigma * delta_sigma) / (sigma_bar ** 6)
-        Sigma = sys_pref * (dt @ dt.T)
-        # Add the diagonal random variance term [Eq. (A.10b)].
-        Sigma[np.diag_indices_from(Sigma)] += var_rand_k
-
-        # Residual vector y - ybar.
-        r = yk - ybar
-
-        # Use Cholesky factorization for numerical stability when evaluating Eq. (A.9).
-        try:
-            L = np.linalg.cholesky(Sigma)
-        except np.linalg.LinAlgError:
-            return -np.inf
-
-        # Compute statistical distance.
-        # d^2 = (y - ybar)^T Sigma^{-1} (y - ybar) [Eq. (A.11)]
-        z = np.linalg.solve(L, r)
-        d2 = float(z.T @ z)
-        # log |Sigma| from the Cholesky factor.
-        logdet = 2.0 * np.sum(np.log(np.diag(L)))
-
-        # Multivariate normal log-likelihood [Eq. (A.9)].
-        p_local = yk.size
-        return float(-0.5 * (p_local * np.log(2.0 * np.pi) + logdet + d2))
 
     def _tau_hat_for_one_event(s_event: np.ndarray, y_event: np.ndarray) -> np.ndarray:
         """
@@ -419,7 +429,45 @@ def mle_tau_moteki_kondo(
             best_ll = -np.inf
             best_tau = np.nan
             for tau_cand in grid:
-                ll = _logL_for_tau(yk, sk, tk, float(tau_cand))
+                _, _, _, d2 = _moteki_kondo_subset_statistics(
+                    yk,
+                    sk,
+                    tk,
+                    float(tau_cand),
+                    h=h,
+                    sigma_bar=sigma_bar,
+                    delta_sigma=delta_sigma,
+                    A1=A1,
+                    A2=A2,
+                    A3=A3,
+                )
+
+                if d2 is None:
+                    ll = -np.inf
+                else:
+                    # Reconstruct the log-likelihood from the same subset statistics.
+                    # Eq. (A.9): log L = -1/2 * [p log(2pi) + log|Sigma| + d^2]
+                    # Since _moteki_kondo_subset_statistics does not return log|Sigma|,
+                    # we compute likelihood separately here for the grid-search step.
+                    ybar, Sigma, L, d2 = _moteki_kondo_subset_statistics(
+                        yk,
+                        sk,
+                        tk,
+                        float(tau_cand),
+                        h=h,
+                        sigma_bar=sigma_bar,
+                        delta_sigma=delta_sigma,
+                        A1=A1,
+                        A2=A2,
+                        A3=A3,
+                    )
+                    if L is None or d2 is None:
+                        ll = -np.inf
+                    else:
+                        logdet = 2.0 * np.sum(np.log(np.diag(L)))
+                        p_local = yk.size
+                        ll = float(-0.5 * (p_local * np.log(2.0 * np.pi) + logdet + d2))
+
                 if ll > best_ll:
                     best_ll = ll
                     best_tau = float(tau_cand)
@@ -445,114 +493,6 @@ def mle_tau_moteki_kondo(
             "units": "sample_index_or_time_units_of_t",
         },
     )
-
-def _to_dataarray(
-    obj: Union[xr.DataArray, xr.Dataset],
-    name: str,
-    ch: Optional[str] = None,
-) -> xr.DataArray:
-    """
-    Convert a DataArray/Dataset to a DataArray.
-
-    If a Dataset is supplied:
-      - use `ch` if provided
-      - otherwise accept only a single-variable Dataset
-    """
-    if isinstance(obj, xr.DataArray):
-        return obj
-
-    if isinstance(obj, xr.Dataset):
-        if ch is not None:
-            if ch not in obj.data_vars:
-                raise ValueError(
-                    f"{ch!r} not found in {name}.data_vars={list(obj.data_vars)}"
-                )
-            return obj[ch]
-
-        if len(obj.data_vars) == 1:
-            only_var = next(iter(obj.data_vars))
-            return obj[only_var]
-
-        raise ValueError(
-            f"{name} is a Dataset with multiple variables. "
-            f"Provide ch. Available: {list(obj.data_vars)}"
-        )
-
-    raise TypeError(f"{name} must be an xarray DataArray or Dataset.")
-
-
-def _moteki_kondo_subset_statistics(
-    yk: np.ndarray,
-    sk: np.ndarray,
-    tk: np.ndarray,
-    tau: float,
-    *,
-    h: float,
-    sigma_bar: float,
-    delta_sigma: float,
-    A1: float,
-    A2: float,
-    A3: float,
-) -> tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray], Optional[float]]:
-    """
-    Internal shared helper for Moteki & Kondo Appendix A.
-
-    Returns
-    -------
-    ybar : np.ndarray
-        Mean vector [Eq. (A.4)].
-    Sigma : np.ndarray
-        Covariance matrix [Eqs. (A.10a), (A.10b)].
-    L : np.ndarray or None
-        Cholesky factor of Sigma, if Sigma is positive definite.
-    d2 : float or None
-        Statistical distance squared [Eq. (A.11)].
-    """
-    # Mean vector of S'/S under a Gaussian beam:
-    #   ybar_i(tau) = -(t_i - tau) / sigma_bar^2   [Eq. (A.4)]
-    ybar = -(tk - tau) / (sigma_bar * sigma_bar)
-
-    # Signal-noise amplitude:
-    #   delta S_i = sqrt(A1^2 + A2^2 S_i + A3^2 S_i^2)   [Eq. (A.6)]
-    deltaS = np.sqrt(A1 * A1 + (A2 * A2) * sk + (A3 * A3) * (sk * sk))
-
-    # Random variance in y = S'/S from finite-difference error propagation:
-    #   (delta y_i)_ran = Af_d * (1/h) * (1/S_i) * deltaS_i   [Eq. (A.7)]
-    Af_d = np.sqrt(130.0) / 12.0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        var_rand_k = (Af_d * Af_d) / (h * h) * (deltaS * deltaS) / (sk * sk)
-
-    if not np.all(np.isfinite(var_rand_k)):
-        return None, None, None, None
-    if np.any(var_rand_k <= 0):
-        return None, None, None, None
-
-    # Systematic covariance from particle-by-particle fluctuation in sigma:
-    #   Cov[y_i, y_j] = 4/sigma_bar^6 * (t_i - tau)(t_j - tau) * delta_sigma^2   [Eq. (A.10a)]
-    #   Var[y_i]      = 4/sigma_bar^6 * (t_i - tau)^2 * delta_sigma^2 + random term [Eq. (A.10b)]
-    dt = (tk - tau).reshape(-1, 1)
-    sys_pref = 4.0 * (delta_sigma * delta_sigma) / (sigma_bar ** 6)
-    Sigma = sys_pref * (dt @ dt.T)
-
-    # Add the diagonal random variance term [Eq. (A.10b)].
-    Sigma[np.diag_indices_from(Sigma)] += var_rand_k
-
-    # Residual vector.
-    r = yk - ybar
-
-    # Cholesky factorization for stable evaluation of the multivariate Gaussian.
-    try:
-        L = np.linalg.cholesky(Sigma)
-    except np.linalg.LinAlgError:
-        return ybar, Sigma, None, None
-
-    # Statistical distance:
-    #   d^2(k) = (y_k - ybar_k)^T Sigma_k^{-1} (y_k - ybar_k)   [Eq. (A.11)]
-    z = np.linalg.solve(L, r)
-    d2 = float(z.T @ z)
-
-    return ybar, Sigma, L, d2
-
 
 def compute_d2_moteki_kondo(
     S: Union[xr.DataArray, xr.Dataset],
