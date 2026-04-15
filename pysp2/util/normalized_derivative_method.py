@@ -87,18 +87,22 @@ def central_difference(S, num_records=None, normalize=True, baseline_to_zero=Tru
     return xr.Dataset(dSdt)
 
 
-def plot_normalized_derivative(ds, record_no, chn=0):
+def plot_normalized_derivative(S, ds, record_no, chn=0, plot_scattering_signal=False):
     """
     Plots the normalized derivative of the scattering signal for a given record_no and channel.
 
     Parameters
     ----------
+    S: xarray Dataset
+        The original scattering signal dataset, used for optional overlay.
     ds: xarray Dataset
         The dataset containing the normalized derivative to plot.
     record_no: int
         The record number to plot.
     chn: int
         The channel number to plot (0 or 4).
+    plot_scattering_signal: bool
+        If True, overlay the original scattering signal on the plot.
     Returns
     -------
     ax: matplotlib Axes
@@ -114,10 +118,10 @@ def plot_normalized_derivative(ds, record_no, chn=0):
     inp_data = {}
     inp_data['time'] = xr.DataArray(np.array(time[np.newaxis]),
                                     dims=['time'])
-    inp_data['Data_ch' + str(chn)] = xr.DataArray(
-        spectra['Data_ch' + str(chn)].values[np.newaxis, :],
-        dims=['time', 'bins'])
-    inp_data = xr.Dataset(inp_data)
+    #inp_data['Data_ch' + str(chn)] = xr.DataArray(
+    #    spectra['Data_ch' + str(chn)].values[np.newaxis, :],
+    #    dims=['time', 'bins'])
+    #inp_data = xr.Dataset(inp_data)
 
     bins = np.arange(0, 0.00004-0.3e-6, 0.4e-6)  # 0 to 0.0004 microseconds in steps of 0.4e-6 seconds
     bins = bins*1e6  # convert to microseconds for plotting
@@ -125,14 +129,42 @@ def plot_normalized_derivative(ds, record_no, chn=0):
     ch_name = f'Data_ch{chn}'
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
-    # Plot using bins for x-axis
-    ax.plot(bins, spectra['Data_ch' + str(chn)].values, label=ch_name)
+ # --- Primary axis: normalized derivative ---
+    line1, = ax.plot(
+        bins,
+        spectra[ch_name].values,
+        label=f'{ch_name} (Normalized dS/dt)'
+    )
+
     ax.set_xlim([bins[0], bins[-1]])
-    ax.set_title(f'Normalized Derivative of Scattering Signal - Channel {chn} Record {record_no}')
-    ax.set_xlabel('Time ($\mu$s)')
+    ax.set_xlabel('Time ($\\mu$s)')
     ax.set_ylabel('Normalized Derivative')
-    plt.grid()
-    ax.legend()
+
+    # --- Secondary axis: scattering signal ---
+    if plot_scattering_signal:
+        ax2 = ax.twinx()
+        y = S[ch_name].isel(event_index=record_no).values
+        y = y - np.nanmin(y)  # baseline shift
+
+        line2, = ax2.plot(
+            bins,
+            y,
+            color = 'black',
+            linestyle='--',
+            label=f'{ch_name} (Scattering Signal)'
+        )
+        ax2.set_ylabel('Scattering Signal (baseline shifted)')
+
+        # Combine legends
+        lines = [line1, line2]
+        labels = [l.get_label() for l in lines]
+        ax.legend(lines, labels)
+    else:
+        ax.legend()
+    ax.set_title(
+        f'Normalized Derivative of Scattering Signal - Channel {chn} Record {record_no}'
+    )
+    ax.grid()
 
     return ax
 

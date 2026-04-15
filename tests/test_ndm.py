@@ -50,7 +50,10 @@ def test_mle_estimate_tau():
         event_index=499,
         config=cfg,
     )
+    print(my_binary['Data_ch0'].isel(event_index=499).argmax().item())
     tau_val = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6
+    print("Estimated tau values:", tau.values)
+    print("True tau value:", tau_val)   
     # Test that the estimated tau for a subset of results is close to the true value for the event
     for i in range(25, 34):
         np.testing.assert_almost_equal(tau[i], tau_val, decimal=6)
@@ -64,6 +67,8 @@ def test_mle_estimate_tau():
     event_index=499,
     config=cfg,
     )
+
+    print("d2 values:", d2.values)
 
     # Define k window
     k_start, k_end = 18, 34
