@@ -143,6 +143,6 @@ def test_mle_estimate_tau():
     np.testing.assert_allclose(
         tau_best,
         tau_val_true,
-        atol=0.02e-04,  # absolute tolerance = 1e-7
+        atol=0.02e-04,  # absolute tolerance = 2e-6 (larger tolerance for evaporation events)
     )
     
