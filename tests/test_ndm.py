@@ -50,13 +50,10 @@ def test_mle_estimate_tau():
         event_index=499,
         config=cfg,
     )
-    print(my_binary['Data_ch0'].isel(event_index=499).argmax().item())
-    tau_val = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6
-    print("Estimated tau values:", tau.values)
-    print("True tau value:", tau_val)   
+    tau_val_true = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6 
     # Test that the estimated tau for a subset of results is close to the true value for the event
     for i in range(25, 34):
-        np.testing.assert_almost_equal(tau[i], tau_val, decimal=6)
+        np.testing.assert_almost_equal(tau[i], tau_val_true, decimal=6)
     
     d2 = compute_d2_moteki_kondo(
     S=my_binary,
@@ -67,8 +64,6 @@ def test_mle_estimate_tau():
     event_index=499,
     config=cfg,
     )
-
-    print("d2 values:", d2.values)
 
     # Define k window
     k_start, k_end = 18, 34
@@ -82,7 +77,7 @@ def test_mle_estimate_tau():
     # Assert closeness
     np.testing.assert_allclose(
         tau_best,
-        tau_val,
+        tau_val_true,
         atol=0.01e-05,  # absolute tolerance = 1e-7
     )
 
@@ -117,5 +112,37 @@ def test_mle_estimate_tau():
         tau_best,
         tau_val,
         atol=0.05e-05,  # absolute tolerance = 1e-7
+    )
+
+    ## Test another event
+    tau = mle_tau_moteki_kondo(
+        S=my_binary,
+        norm_deriv=dSdt,
+        p=10,
+        ch="Data_ch4",
+        event_index=2008,
+        config=cfg,
+    )
+
+    d2 = compute_d2_moteki_kondo(
+    S=my_binary,
+    norm_deriv=dSdt,
+    tau_hat=tau,
+    p=10,
+    ch="Data_ch4",
+    event_index=2008,
+    config=cfg,
+    )
+
+    # Test that the estimated tau for a subset of results is close to the true value for the event
+    for i in range(39, 42):
+        np.testing.assert_almost_equal(tau[i], tau_val_true, decimal=6)
+
+    tau_best = tau.isel(k=39).item()
+    # Assert closeness
+    np.testing.assert_allclose(
+        tau_best,
+        tau_val_true,
+        atol=0.02e-04,  # absolute tolerance = 1e-7
     )
     
