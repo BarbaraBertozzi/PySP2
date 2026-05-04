@@ -118,10 +118,6 @@ def plot_normalized_derivative(S, ds, record_no, chn=0, plot_scattering_signal=F
     inp_data = {}
     inp_data['time'] = xr.DataArray(np.array(time[np.newaxis]),
                                     dims=['time'])
-    #inp_data['Data_ch' + str(chn)] = xr.DataArray(
-    #    spectra['Data_ch' + str(chn)].values[np.newaxis, :],
-    #    dims=['time', 'bins'])
-    #inp_data = xr.Dataset(inp_data)
 
     bins = np.arange(0, 0.00004-0.3e-6, 0.4e-6)  # 0 to 0.0004 microseconds in steps of 0.4e-6 seconds
     bins = bins*1e6  # convert to microseconds for plotting
