@@ -6,6 +6,18 @@ import xarray as xr
 from dataclasses import dataclass
 from typing import Optional, Union
 
+"""
+Moteki & Kondo (2008) Normalized Derivative Method
+Module contains functions to compute the normalized derivative of scattering signals
+and to perform MLE estimation of tau using the Moteki & Kondo method.
+
+References
+----------
+Moteki, N., & Kondo, Y. (2008). Method to measure time-dependent scattering cross 
+    sections of particles evaporating in a laser beam. Journal of aerosol science, 
+    39(4), 348-364.
+"""
+
 
 def central_difference(S, num_records=None, normalize=True, baseline_to_zero=True):
 
