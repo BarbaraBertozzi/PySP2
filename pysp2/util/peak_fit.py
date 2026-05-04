@@ -84,7 +84,7 @@ def chisquare(obs, f_exp):
     return np.sum((obs - f_exp)**2)
 
 
-def gaussian_fit(my_ds, config, parallel=False, num_records=None):
+def gaussian_fit(my_ds, config, parallel=False, num_records=None, baseline_to_zero=False):
     """
     Does Gaussian fitting for each wave in the dataset.
     This will do the fitting for channel 0 only.
@@ -102,6 +102,8 @@ def gaussian_fit(my_ds, config, parallel=False, num_records=None):
     num_records: int or None
         Only process first num_records datapoints. Set to
         None to process all records.
+    baseline_to_zero: bool
+        If True, shift each record's minimum to zero before fitting (channel 0).
 
     Returns
     -------
@@ -113,6 +115,12 @@ def gaussian_fit(my_ds, config, parallel=False, num_records=None):
 
     num_trig_pts = int(config['Acquisition']['Pre-Trig Points'])
     start_time = time.time()
+
+    # Move baseline to zero for channel 0 if flag is set
+    if baseline_to_zero:
+        # For each event, subtract the minimum from Data_ch0
+        min_vals = np.nanmin(my_ds['Data_ch0'].values, axis=1)
+        my_ds['Data_ch0'].values = my_ds['Data_ch0'].values - min_vals[:, np.newaxis]
 
     for i in [3, 7]:
         coeffs = _split_scatter_fit(my_ds, i)
@@ -185,7 +193,7 @@ def gaussian_fit(my_ds, config, parallel=False, num_records=None):
         proc_records = []
         for i in range(num_records):
             proc_records.append(_do_fit_records(my_ds, i, num_trig_pts))
-        
+
     FtAmp = np.stack([x[0] for x in proc_records])
     FtPos = np.stack([x[1] for x in proc_records])
     Base = np.stack([x[2] for x in proc_records])

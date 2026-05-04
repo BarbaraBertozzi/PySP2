@@ -18,4 +18,4 @@ from .DMTGlobals import DMTGlobals
 from .particle_properties import calc_diams_masses, process_psds
 from .deadtime import deadtime
 from .leo_fit import beam_shape,leo_fit
-from .normalized_derivative_method import central_difference
+from .normalized_derivative_method import central_difference, plot_normalized_derivative, mle_tau_moteki_kondo
