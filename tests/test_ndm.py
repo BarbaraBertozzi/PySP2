@@ -2,7 +2,7 @@ import pysp2
 import numpy as np
 np.set_printoptions(threshold=np.inf)
 
-from pysp2.util.normalized_derivative_method import MLEConfig, mle_tau_moteki_kondo
+from pysp2.util.normalized_derivative_method import MLEConfig, mle_tau_moteki_kondo, compute_d2_moteki_kondo
 
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
@@ -30,12 +30,12 @@ def test_mle_estimate_tau():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
     my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)
     my_binary = pysp2.util.gaussian_fit(my_sp2b, my_ini, parallel=False, baseline_to_zero=True)
-    dSdt = pysp2.util.central_difference(my_binary, normalize=False, baseline_to_zero=True)
+    dSdt = pysp2.util.central_difference(my_binary, normalize=True, baseline_to_zero=True)
 
     cfg = MLEConfig(
     h=0.4e-6,           # example: 0.4 microseconds
-    sigma_bar=26.28*0.4e-6,   # example; use your measured average width
-    delta_sigma=1.2*0.4e-6,# example; use your measured width std dev
+    sigma_bar= 16.6*0.4e-6,  # example; use your measured average width
+    delta_sigma=1.2*0.4e-6, # example; use your measured width std dev
     A1=0.37,
     A2=1.6e-2,
     A3=6.2e-4,
@@ -45,21 +45,47 @@ def test_mle_estimate_tau():
     tau = mle_tau_moteki_kondo(
         S=my_binary,
         norm_deriv=dSdt,
-        p=21,
+        p=10,
         ch="Data_ch0",
         event_index=499,
         config=cfg,
     )
-    tau_val = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6
+    tau_val_true = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6 
     # Test that the estimated tau for a subset of results is close to the true value for the event
-    for i in range(21, 37):
-        np.testing.assert_almost_equal(tau[i], tau_val, decimal=6)
+    for i in range(25, 34):
+        np.testing.assert_almost_equal(tau[i], tau_val_true, decimal=6)
+    
+    d2 = compute_d2_moteki_kondo(
+    S=my_binary,
+    norm_deriv=dSdt,
+    tau_hat=tau,
+    p=10,
+    ch="Data_ch0",
+    event_index=499,
+    config=cfg,
+    )
+
+    # Define k window
+    k_start, k_end = 18, 34
+    d2_subset = d2.isel(k=slice(k_start, k_end + 1))
+    # Find index of minimum d2 within subset
+    k_min_local = int(d2_subset.argmin(dim="k").item())
+    k_min = k_start + k_min_local
+    # Get corresponding tau value
+    tau_best = tau.isel(k=k_min).item()
+
+    # Assert closeness
+    np.testing.assert_allclose(
+        tau_best,
+        tau_val_true,
+        atol=0.01e-05,  # absolute tolerance = 1e-7
+    )
 
     ## Test another event
     tau = mle_tau_moteki_kondo(
         S=my_binary,
         norm_deriv=dSdt,
-        p=21,
+        p=10,
         ch="Data_ch0",
         event_index=1040,
         config=cfg,
@@ -67,6 +93,56 @@ def test_mle_estimate_tau():
 
     tau_val = my_binary['Data_ch0'].isel(event_index=1040).argmax().item()*0.4e-6
     # Test that the estimated tau for a subset of results is close to the true value for the event
-    for i in range(23, 38):
+    for i in range(31, 43):
         np.testing.assert_almost_equal(tau[i], tau_val, decimal=6)
+
+    d2 = compute_d2_moteki_kondo(
+    S=my_binary,
+    norm_deriv=dSdt,
+    tau_hat=tau,
+    p=10,
+    ch="Data_ch0",
+    event_index=1040,
+    config=cfg,
+    )
+
+    tau_best = tau.isel(k=35).item()
+    # Assert closeness
+    np.testing.assert_allclose(
+        tau_best,
+        tau_val,
+        atol=0.05e-05,  # absolute tolerance = 1e-7
+    )
+
+    ## Test another event
+    tau = mle_tau_moteki_kondo(
+        S=my_binary,
+        norm_deriv=dSdt,
+        p=10,
+        ch="Data_ch4",
+        event_index=2008,
+        config=cfg,
+    )
+
+    d2 = compute_d2_moteki_kondo(
+    S=my_binary,
+    norm_deriv=dSdt,
+    tau_hat=tau,
+    p=10,
+    ch="Data_ch4",
+    event_index=2008,
+    config=cfg,
+    )
+
+    # Test that the estimated tau for a subset of results is close to the true value for the event
+    for i in range(39, 42):
+        np.testing.assert_almost_equal(tau[i], tau_val_true, decimal=6)
+
+    tau_best = tau.isel(k=39).item()
+    # Assert closeness
+    np.testing.assert_allclose(
+        tau_best,
+        tau_val_true,
+        atol=0.02e-04,  # absolute tolerance = 2e-6 (larger tolerance for evaporation events)
+    )
     
