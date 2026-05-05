@@ -361,7 +361,10 @@ def process_psds(particle_ds, hk_ds, config, deltaSize=0.005, num_bins=199,
                                   SizeIncandOnly[the_particles], side='right')
             
             #axis 0 = time, axis 1 incandesence, axis 2 leo size
-            np.add.at(leo_IncandScatNumEnsemble[t,:,:], (ind_incan,ind_leo), OneOfEvery[the_particles])
+            if deltaSize==0:
+                np.add.at(leo_IncandScatNumEnsemble[t,:,:], (ind_incan - 1,ind_leo - 1), OneOfEvery[the_particles])
+            else:
+                np.add.at(leo_IncandScatNumEnsemble[t,:,:], (ind_incan, ind_leo), OneOfEvery[the_particles])
 
         scat_parts = np.logical_and(scatter_accept, parts_time)
         incan_parts = np.logical_and(incand_accept, parts_time)

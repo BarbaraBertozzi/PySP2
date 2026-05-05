@@ -179,10 +179,14 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     
     #moving average of the beam shape with a window of moving_average_window
     moving_ch0_profile_window = np.lib.stride_tricks.sliding_window_view(my_ch0_profiles, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch0)), 
+                                                                     axis=0)
     moving_avg_ch0_profiles_ = np.nanmedian(moving_ch0_profile_window,axis=2)
     moving_ch4_profile_window = np.lib.stride_tricks.sliding_window_view(my_ch4_profiles, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch4)), 
+                                                                     axis=0)
     moving_avg_ch4_profiles_ = np.nanmedian(moving_ch4_profile_window,axis=2)
     
     moving_avg_ch0_profiles = np.zeros_like(moving_avg_ch0_profiles_) * np.nan
@@ -199,6 +203,8 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     for i in range(moving_avg_ch0_profiles_.shape[0]):
         i_profile = moving_avg_ch0_profiles_[i,:]
         i_max = np.nanargmax(i_profile)
+        if i_max < num_base_pts_2_avg:
+            continue
         i_range = i_profile[i_max] - np.nanmin(i_profile[:i_max])
         moving_avg_ch0_profiles[i,:] =  (i_profile - np.nanmin(i_profile[:i_max])) / i_range
         #interpolate here to get the exact position in fraction (not integer) :: which posiiton (float) is the 0.03 cross in
@@ -212,6 +218,8 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     for i in range(moving_avg_ch4_profiles_.shape[0]):
         i_profile = moving_avg_ch4_profiles_[i,:]
         i_max = np.nanargmax(i_profile)
+        if i_max < num_base_pts_2_avg:
+            continue
         i_range = i_profile[i_max] - np.nanmin(i_profile[:i_max])
         moving_avg_ch4_profiles[i,:] =  (i_profile - np.nanmin(i_profile[:i_max])) / i_range
         #interpolate here to get the exact position in fraction (not integer) :: which posiiton (float) is the 0.03 cross in
@@ -239,17 +247,21 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
 
     #moving average of beam width
     moving_ch0_beam_width = np.lib.stride_tricks.sliding_window_view(my_ch0_scatterers['PkFWHM_ch0'].values, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch0)), axis=0)
     moving_ch4_beam_width = np.lib.stride_tricks.sliding_window_view(my_ch4_scatterers['PkFWHM_ch4'].values, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch4)), axis=0)
     moving_median_ch0_beam_width = np.nanmedian(moving_ch0_beam_width,axis=1)
     moving_median_ch4_beam_width = np.nanmedian(moving_ch4_beam_width,axis=1)
         
     #Moving cross to centre (c2c)
     moving_ch0_c2c = np.lib.stride_tricks.sliding_window_view(ch0_c2c, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch0)), axis=0)
     moving_ch4_c2c = np.lib.stride_tricks.sliding_window_view(ch4_c2c, 
-                                                                     moving_average_window, axis=0)
+                                                                     min(moving_average_window,
+                                                                         np.sum(only_scattering_ch4)), axis=0)
 
     moving_median_ch0_c2c = np.nanmedian(moving_ch0_c2c,axis=1)
     moving_median_ch4_c2c = np.nanmedian(moving_ch4_c2c,axis=1)
@@ -316,6 +328,10 @@ def beam_shape(my_binary, beam_position_from='split point', Globals=None,
     output_ds['leo_EndPos_ch0'].values = np.where(output_ds['leo_EndPos_ch0'].values < num_base_pts_2_avg,
                                                   np.nan, output_ds['leo_EndPos_ch0'].values)
     output_ds['leo_EndPos_ch4'].values = np.where(output_ds['leo_EndPos_ch4'].values < num_base_pts_2_avg,
+                                                  np.nan, output_ds['leo_EndPos_ch4'].values)
+    output_ds['leo_EndPos_ch0'].values = np.where(output_ds['leo_EndPos_ch0'].values > Globals.ScatMaxPeakPos,
+                                                  np.nan, output_ds['leo_EndPos_ch0'].values)
+    output_ds['leo_EndPos_ch4'].values = np.where(output_ds['leo_EndPos_ch4'].values > Globals.ScatMaxPeakPos,
                                                   np.nan, output_ds['leo_EndPos_ch4'].values)
         
     output_ds['leo_PkFWHM_ch0'] = output_ds['leo_PkFWHM_ch0'].interpolate_na(dim="event_index", 
