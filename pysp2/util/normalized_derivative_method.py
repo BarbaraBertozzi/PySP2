@@ -389,7 +389,7 @@ def mle_tau_moteki_kondo(
     norm_deriv: Union[xr.DataArray, xr.Dataset],
     p: int,
     *,
-    ch: Optional[str] = None,
+    ch: str = None,
     event_index: int,
     event_dim: str = "event_index",
     S_sample_dim: Optional[str] = None,
@@ -410,7 +410,7 @@ def mle_tau_moteki_kondo(
         Normalized derivative.
     p : int
         Number of consecutive points in each k-subset.
-    ch : str, optional
+    ch : str
         Variable to select when S and/or norm_deriv are Datasets.
         Required if a Dataset contains multiple variables and no unique choice exists.
     event_index : int
@@ -477,6 +477,8 @@ def mle_tau_moteki_kondo(
             tau_grid.data if isinstance(tau_grid, xr.DataArray) else tau_grid,
             dtype=float,
         )
+        if tau_grid_np.ndim != 1:
+            raise ValueError("tau_grid must be 1D.")
     else:
         tau_grid_np = None
 
@@ -488,6 +490,13 @@ def mle_tau_moteki_kondo(
 
     # Time axis (must match instrument sampling)
     t = np.arange(n_samples, dtype=float) * h
+
+    if h <= 0:
+        raise ValueError("config.h must be positive.")
+    if sigma_bar <= 0:
+        raise ValueError("config.sigma_bar must be positive.")
+    if delta_sigma < 0:
+        raise ValueError("config.delta_sigma must be >= 0.")
 
     def _tau_hat_for_one_event(s_event, y_event):
         """
@@ -561,7 +570,7 @@ def compute_d2_moteki_kondo(
     tau_hat: Union[np.ndarray, xr.DataArray],
     p: int,
     *,
-    ch: Optional[str] = None,
+    ch: str = None,
     event_index: int,
     event_dim: str = "event_index",
     S_sample_dim: Optional[str] = None,
@@ -587,7 +596,7 @@ def compute_d2_moteki_kondo(
         tau_hat(k) for the selected event. Must have length k_end + 1.
     p : int
         Number of consecutive points in each k-subset.
-    ch : str, optional
+    ch : str
         Variable name to select when S and/or norm_deriv are Datasets.
     event_index : int
         Event index to evaluate.
@@ -674,11 +683,13 @@ def compute_d2_moteki_kondo(
         raise ValueError("tau_hat length mismatch with window.")
 
     # Moteki & Kondo parameters
-    h = config.h
-    sigma_bar = config.sigma_bar
-    delta_sigma = config.delta_sigma
-    A1, A2, A3 = config.A1, config.A2, config.A3
+    h = float(config.h)
+    sigma_bar = float(config.sigma_bar)
+    delta_sigma = float(config.delta_sigma)
+    A1, A2, A3 = float(config.A1), float(config.A2), float(config.A3)
 
+    # Time axis used in the fit.
+    # This should match the time axis used in mle_tau_moteki_kondo.
     t = np.arange(n_samples) * h
 
     s_event = S_std.sel({event_dim: event_index}).values
@@ -692,7 +703,7 @@ def compute_d2_moteki_kondo(
         sk = s_event[k:k+p]
         tk = t[k:k+p]
 
-        tau_k = tau_hat_np[i]
+        tau_k = float(tau_hat_np[i])
 
         # Build mean, covariance, and compute distance [Eqs. A.4, A.10, A.11]
         _, _, _, d2 = _moteki_kondo_subset_statistics(
