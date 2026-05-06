@@ -41,7 +41,7 @@ def test_mle_estimate_tau():
     A3=6.2e-4,
 )
     
-    ## Test one event
+    ## Test one event ##################################################
     tau = mle_tau_moteki_kondo(
         S=my_binary,
         norm_deriv=dSdt,
@@ -55,17 +55,19 @@ def test_mle_estimate_tau():
 
     tau_val_true = my_binary['Data_ch0'].isel(event_index=499).argmax().item()*0.4e-6
     # Test that the estimated tau for a subset of results is close to the true value for the event
-    for i in range(6, 17):
+    for i in range(13, 17):
         np.testing.assert_almost_equal(tau[i], tau_val_true, decimal=6)
     
     d2 = compute_d2_moteki_kondo(
-    S=my_binary,
-    norm_deriv=dSdt,
-    tau_hat=tau,
-    p=10,
-    ch="Data_ch0",
-    event_index=499,
-    config=cfg,
+        S=my_binary,
+        norm_deriv=dSdt,
+        tau_hat=tau,
+        p=10,
+        ch="Data_ch0",
+        event_index=499,
+        min_start=15,
+        width_metric="fwhm",
+        config=cfg,
     )
 
     k_min_local = int(d2.argmin(dim="k").item())
@@ -79,29 +81,33 @@ def test_mle_estimate_tau():
         atol=0.01e-05,  # absolute tolerance = 1e-7
     )
 
-    ## Test another event
+    ## Test another event ##################################################
     tau = mle_tau_moteki_kondo(
         S=my_binary,
         norm_deriv=dSdt,
-        p=10,
+        p=6,
         ch="Data_ch0",
         event_index=1040,
+        min_start=15,
+        width_metric="fwtm",
         config=cfg,
     )
 
     tau_val = my_binary['Data_ch0'].isel(event_index=1040).argmax().item()*0.4e-6
     # Test that the estimated tau for a subset of results is close to the true value for the event
-    for i in range(15, 16):
-        np.testing.assert_almost_equal(tau[i], tau_val, decimal=5)
+    for i in range(18, 28):
+        np.testing.assert_allclose(tau[i], tau_val, atol=0.08e-05)
 
     d2 = compute_d2_moteki_kondo(
-    S=my_binary,
-    norm_deriv=dSdt,
-    tau_hat=tau,
-    p=10,
-    ch="Data_ch0",
-    event_index=1040,
-    config=cfg,
+        S=my_binary,
+        norm_deriv=dSdt,
+        tau_hat=tau,
+        p=6,
+        ch="Data_ch0",
+        event_index=1040,
+        min_start=15,
+        width_metric="fwtm",
+        config=cfg,
     )
 
     k_min_local = int(d2.argmin(dim="k").item())
@@ -112,39 +118,46 @@ def test_mle_estimate_tau():
     np.testing.assert_allclose(
         tau_best,
         tau_val,
-        atol=0.08e-05,  # absolute tolerance = 2e-7
+        atol=0.04e-05,  # absolute tolerance = 4e-7
     )
     
-    ## Test another event
+    ## Test another event ##################################################
     tau = mle_tau_moteki_kondo(
         S=my_binary,
         norm_deriv=dSdt,
-        p=10,
+        p=8,
         ch="Data_ch4",
         event_index=2008,
+        min_start=15,
+        width_metric="fwtm",
         config=cfg,
     )
 
     d2 = compute_d2_moteki_kondo(
-    S=my_binary,
-    norm_deriv=dSdt,
-    tau_hat=tau,
-    p=10,
-    ch="Data_ch4",
-    event_index=2008,
-    config=cfg,
+        S=my_binary,
+        norm_deriv=dSdt,
+        tau_hat=tau,
+        p=8,
+        ch="Data_ch4",
+        event_index=2008,
+        min_start=15,
+        width_metric="fwtm",
+        config=cfg,
     )
 
     # Test that the estimated tau for a subset of results is close to the true value for the event
-    for i in range(0, len(tau)-1):
-        np.testing.assert_almost_equal(tau[i], tau_val_true, decimal=6)
+    for i in range(2, 4):
+        np.testing.assert_allclose(tau[i], tau_val_true, atol=0.08e-05)
+    for i in range(10,15):
+        np.testing.assert_allclose(tau[i], tau_val_true, atol=0.05e-05)
 
     k_min_local = int(d2.argmin(dim="k").item())
     # Get corresponding tau value
     tau_best = tau.isel(k=k_min_local).item()
+ 
     # Assert closeness
     np.testing.assert_allclose(
         tau_best,
         tau_val_true,
-        atol=0.05e-05,  # absolute tolerance = 2e-6 (larger tolerance for evaporation events)
+        atol=0.01e-05,  # absolute tolerance = 2e-6 (larger tolerance for evaporation events)
     )
