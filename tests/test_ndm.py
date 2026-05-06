@@ -3,6 +3,7 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 
 from pysp2.util.normalized_derivative_method import MLEConfig, mle_tau_moteki_kondo, compute_d2_moteki_kondo
+from pysp2.util.normalized_derivative_method import compute_sigma_moteki_kondo
 
 def test_central_difference():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
@@ -26,7 +27,7 @@ def test_central_difference():
     np.testing.assert_almost_equal(dSdt_norm['Data_ch4'].isel(event_index=5876, time=19).item(), 
                                    1.5e7/-30132, decimal=2)
     
-def test_mle_estimate_tau():
+def test_ndm_moteki_kondo():
     my_sp2b = pysp2.io.read_sp2(pysp2.testing.EXAMPLE_SP2B)
     my_ini = pysp2.io.read_config(pysp2.testing.EXAMPLE_INI)
     my_binary = pysp2.util.gaussian_fit(my_sp2b, my_ini, parallel=False, baseline_to_zero=True)
@@ -81,6 +82,20 @@ def test_mle_estimate_tau():
         atol=0.01e-05,  # absolute tolerance = 1e-7
     )
 
+    sigma_ds = compute_sigma_moteki_kondo(
+        S=my_binary,
+        norm_deriv=dSdt,
+        tau_hat=tau,
+        d2=d2,
+        p=10,
+        ch="Data_ch0",
+        event_index=499,
+        min_start=15,
+        width_metric="fwhm",
+        config=cfg,
+    )
+    print("sigma:", sigma_ds.values)
+
     ## Test another event ##################################################
     tau = mle_tau_moteki_kondo(
         S=my_binary,
@@ -120,6 +135,20 @@ def test_mle_estimate_tau():
         tau_val,
         atol=0.04e-05,  # absolute tolerance = 4e-7
     )
+
+    sigma_ds = compute_sigma_moteki_kondo(
+        S=my_binary,
+        norm_deriv=dSdt,
+        tau_hat=tau,
+        d2=d2,
+        p=6,
+        ch="Data_ch0",
+        event_index=1040,
+        min_start=15,
+        width_metric="fwtm",
+        config=cfg,
+    )
+    print("sigma:", sigma_ds.values)
     
     ## Test another event ##################################################
     tau = mle_tau_moteki_kondo(
@@ -161,3 +190,17 @@ def test_mle_estimate_tau():
         tau_val_true,
         atol=0.01e-05,  # absolute tolerance = 2e-6 (larger tolerance for evaporation events)
     )
+
+    sigma_ds = compute_sigma_moteki_kondo(
+        S=my_binary,
+        norm_deriv=dSdt,
+        tau_hat=tau,
+        d2=d2,
+        p=8,
+        ch="Data_ch4",
+        event_index=2008,
+        min_start=15,
+        width_metric="fwtm",
+        config=cfg,
+    )
+    print("sigma:", sigma_ds.values)

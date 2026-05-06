@@ -722,3 +722,232 @@ def compute_d2_moteki_kondo(
         name="d2",
         attrs={"fit_start": fit_start, "fit_stop": fit_stop}
     )
+
+def compute_sigma_moteki_kondo(
+    S: Union[xr.DataArray, xr.Dataset],
+    norm_deriv: Union[xr.DataArray, xr.Dataset],
+    tau_hat: Union[np.ndarray, xr.DataArray],
+    d2: Union[np.ndarray, xr.DataArray],
+    p: int = 11,
+    *,
+    ch: Optional[str] = None,
+    event_index: int,
+    event_dim: str = "event_index",
+    S_sample_dim: Optional[str] = None,
+    y_sample_dim: Optional[str] = None,
+    min_start: int = 15,
+    width_metric: str = "fwhm",
+    d2_threshold: float = 200000.0,
+    config: Optional[MLEConfig] = None,
+) -> xr.Dataset:
+    """
+    Estimate Gaussian width sigma using the Moteki & Kondo method.
+
+    1. Use the same peak-based window as the tau/d2 routines.
+       - Left bound: PkStart_chX
+       - Right bound: PkStart_chX + width derived from PkFWHM_chX
+    2. Determine kbest as the subset index that minimizes d²(k).
+    3. Use tau_hat[kbest] as tau_best.
+    4. Fit the linear relation y_i = a (t_i - tau_best) on the kbest sub-array
+       using weighted least squares with weights 1 / (δy_i)_ran².
+    5. Convert slope to width by sigma = sqrt(-1 / a).
+
+    Notes
+    -----
+    The paper applies the sigma estimate after requiring d²(kbest) < 200000.
+    For consistency, this function returns sigma_hat = NaN when the threshold
+    is not met, while still returning diagnostic fields.
+    """
+    if config is None:
+        raise ValueError("config must be provided.")
+
+    # Convert datasets to DataArrays if needed.
+    S_original = S
+    S = _to_dataarray(S, "S", ch=ch)
+    norm_deriv = _to_dataarray(norm_deriv, "norm_deriv", ch=ch)
+
+    # Require event dimension.
+    if event_dim not in S.dims:
+        raise ValueError(f"{event_dim!r} not found in S.dims={S.dims}")
+    if event_dim not in norm_deriv.dims:
+        raise ValueError(f"{event_dim!r} not found in norm_deriv.dims={norm_deriv.dims}")
+
+    # Infer sample dimensions if not provided.
+    if S_sample_dim is None:
+        s_non_event_dims = [d for d in S.dims if d != event_dim]
+        if len(s_non_event_dims) != 1:
+            raise ValueError(
+                f"Could not infer S sample dim. Non-event dims in S: {s_non_event_dims}"
+            )
+        S_sample_dim = s_non_event_dims[0]
+
+    if y_sample_dim is None:
+        y_non_event_dims = [d for d in norm_deriv.dims if d != event_dim]
+        if len(y_non_event_dims) != 1:
+            raise ValueError(
+                f"Could not infer norm_deriv sample dim. Non-event dims in norm_deriv: {y_non_event_dims}"
+            )
+        y_sample_dim = y_non_event_dims[0]
+
+    # Standardize sample dimension name.
+    S_std = S.rename({S_sample_dim: "sample"})
+    y_std = norm_deriv.rename({y_sample_dim: "sample"})
+    S_std, y_std = xr.align(S_std, y_std, join="inner")
+
+    if event_index < 0 or event_index >= S_std.sizes[event_dim]:
+        raise ValueError(
+            f"event_index must be in [0, {S_std.sizes[event_dim] - 1}], got {event_index}"
+        )
+
+    n_samples = S_std.sizes["sample"]
+
+    # Same internal peak-based window used by the tau and d2 routines.
+    fit_start, fit_stop, _ = _resolve_peakfit_window(
+        S_original,
+        event_index=event_index,
+        ch=ch if ch is not None else "Data_ch0",
+        event_dim=event_dim,
+        min_start=min_start,
+        width_metric=width_metric,
+        n_samples=n_samples,
+    )
+
+    k_values = np.arange(fit_start, fit_stop - p + 1)
+    if k_values.size == 0:
+        raise ValueError(
+            f"No valid k subsets for p={p} inside window [{fit_start}, {fit_stop})."
+        )
+
+    tau_hat_np = np.asarray(
+        tau_hat.data if isinstance(tau_hat, xr.DataArray) else tau_hat,
+        dtype=float,
+    )
+    d2_np = np.asarray(
+        d2.data if isinstance(d2, xr.DataArray) else d2,
+        dtype=float,
+    )
+
+    if tau_hat_np.ndim != 1:
+        raise ValueError("tau_hat must be 1D.")
+    if d2_np.ndim != 1:
+        raise ValueError("d2 must be 1D.")
+    if tau_hat_np.size != k_values.size:
+        raise ValueError(
+            f"tau_hat length mismatch. Expected {k_values.size}, got {tau_hat_np.size}."
+        )
+    if d2_np.size != k_values.size:
+        raise ValueError(
+            f"d2 length mismatch. Expected {k_values.size}, got {d2_np.size}."
+        )
+
+    finite = np.isfinite(d2_np) & np.isfinite(tau_hat_np)
+    if not np.any(finite):
+        raise ValueError("No finite d2/tau_hat values available to determine kbest.")
+
+    # Moteki & Kondo Appendix A parameters.
+    h = float(config.h)
+    sigma_bar = float(config.sigma_bar)
+    delta_sigma = float(config.delta_sigma)
+    A1, A2, A3 = float(config.A1), float(config.A2), float(config.A3)
+
+    if h <= 0:
+        raise ValueError("config.h must be positive.")
+    if sigma_bar <= 0:
+        raise ValueError("config.sigma_bar must be positive.")
+    if delta_sigma < 0:
+        raise ValueError("config.delta_sigma must be >= 0.")
+
+    # Time axis in the same units used by the MLE routines.
+    t = np.arange(n_samples, dtype=float) * h
+
+    # Select the requested event.
+    s_event = np.asarray(S_std.sel({event_dim: event_index}).values, dtype=float)
+    y_event = np.asarray(y_std.sel({event_dim: event_index}).values, dtype=float)
+
+    if not (np.all(np.isfinite(s_event)) and np.all(np.isfinite(y_event))):
+        raise ValueError(f"Selected event_index={event_index} contains non-finite values.")
+
+    # kbest is the subset index that minimizes d²(k) [Appendix A.5].
+    kbest_local = int(np.nanargmin(np.where(finite, d2_np, np.nan)))
+    kbest = int(k_values[kbest_local])
+    tau_best = float(tau_hat_np[kbest_local])
+    d2_best = float(d2_np[kbest_local])
+
+    # Paper-consistent acceptance test: only proceed when d²(kbest) is small enough.
+    accepted = bool(np.isfinite(d2_best) and (d2_best < d2_threshold))
+
+    # The kbest sub-array used in Appendix A.6.
+    yk = y_event[kbest : kbest + p]
+    sk = s_event[kbest : kbest + p]
+    tk = t[kbest : kbest + p]
+
+    if not (np.all(np.isfinite(yk)) and np.all(np.isfinite(sk))):
+        raise ValueError("kbest sub-array contains non-finite values.")
+
+    # Random-error model from Appendix A.3:
+    #   (δy_i)_ran = Af_d / h * (1 / S_i) * δS_i
+    # with δS_i = sqrt(A1^2 + A2^2 S_i + A3^2 S_i^2)
+    Af_d = np.sqrt(130.0) / 12.0
+    deltaS = np.sqrt(A1 * A1 + (A2 * A2) * sk + (A3 * A3) * (sk * sk))
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        var_rand = (Af_d * Af_d) / (h * h) * (deltaS * deltaS) / (sk * sk)
+
+    if not np.all(np.isfinite(var_rand)) or np.any(var_rand <= 0):
+        raise ValueError("Invalid random-variance weights in the kbest sub-array.")
+
+    # Appendix A.6:
+    # Fit y_i = a (t_i - tau_best) with weights 1 / (δy_i)_ran^2.
+    x = tk - tau_best
+    denom = np.sum((x * x) / var_rand)
+    if denom <= 0 or not np.isfinite(denom):
+        raise ValueError("Degenerate weighted least-squares system for sigma estimation.")
+
+    # Weighted slope estimate for the zero-intercept linear model.
+    a = np.sum((x * yk) / var_rand) / denom
+
+    # Appendix A.6: sigma = sqrt(-1 / a)
+    if accepted and np.isfinite(a) and a < 0:
+        sigma_hat = float(np.sqrt(-1.0 / a))
+    else:
+        sigma_hat = np.nan
+
+    out = xr.Dataset(
+        data_vars={
+            "sigma_hat": xr.DataArray(
+                sigma_hat,
+                attrs={
+                    "long_name": "Moteki & Kondo Gaussian width sigma",
+                    "units": "time units of t",
+                },
+            ),
+            "slope": xr.DataArray(
+                float(a),
+                attrs={"long_name": "Weighted least-squares slope a"},
+            ),
+            "tau_best": xr.DataArray(
+                tau_best,
+                attrs={"long_name": "tau associated with kbest"},
+            ),
+            "kbest": xr.DataArray(
+                kbest,
+                attrs={"long_name": "Subset index minimizing d2"},
+            ),
+            "d2_best": xr.DataArray(
+                d2_best,
+                attrs={"long_name": "Minimum d2 value at kbest"},
+            ),
+            "accepted": xr.DataArray(
+                accepted,
+                attrs={"long_name": f"True when d2_best < {d2_threshold}"},
+            ),
+            "fit_start": xr.DataArray(fit_start),
+            "fit_stop": xr.DataArray(fit_stop),
+        },
+        attrs={
+            "method": "Moteki & Kondo weighted least-squares sigma estimate",
+            "width_metric": width_metric,
+            "d2_threshold": d2_threshold,
+        },
+    )
+    return out
