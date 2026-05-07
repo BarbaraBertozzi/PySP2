@@ -94,7 +94,17 @@ def test_ndm_moteki_kondo():
         width_metric="fwhm",
         config=cfg,
     )
-    print("sigma:", sigma_ds.values)
+
+    # example: use the best sigma value from your analysis, divided by 2.355 to convert FWHM to std dev
+    # value of 26.275540424824687 is the average FWHM in seconds from the example dataset 
+    # this is just an example of how to set the tolerance based on the expected sigma of the events
+    sigma_best = (26.275540424824687*0.4e-6)/2.355  
+
+    np.testing.assert_allclose(
+        sigma_ds['sigma_hat'].values,
+        sigma_best,
+        atol=1.4e-6,  # absolute tolerance = 0.02 microseconds
+    )
 
     ## Test another event ##################################################
     tau = mle_tau_moteki_kondo(
@@ -148,7 +158,17 @@ def test_ndm_moteki_kondo():
         width_metric="fwtm",
         config=cfg,
     )
-    print("sigma:", sigma_ds.values)
+
+    # example: use the best sigma value from your analysis, divided by 2.355 to convert FWHM to std dev
+    # value of 25.00349832837095 is the average FWHM in seconds from the example dataset 
+    # this is just an example of how to set the tolerance based on the expected sigma of the events
+    sigma_best = (25.00349832837095*0.4e-6)/2.355  
+
+    np.testing.assert_allclose(
+        sigma_ds['sigma_hat'].values,
+        sigma_best,
+        atol=0.2e-6,  # absolute tolerance = 0.02 microseconds
+    )
     
     ## Test another event ##################################################
     tau = mle_tau_moteki_kondo(
@@ -188,7 +208,7 @@ def test_ndm_moteki_kondo():
     np.testing.assert_allclose(
         tau_best,
         tau_val_true,
-        atol=0.01e-05,  # absolute tolerance = 2e-6 (larger tolerance for evaporation events)
+        atol=0.01e-05,  # absolute tolerance = 1e-6 (larger tolerance for evaporation events)
     )
 
     sigma_ds = compute_sigma_moteki_kondo(
@@ -204,3 +224,17 @@ def test_ndm_moteki_kondo():
         config=cfg,
     )
     print("sigma:", sigma_ds.values)
+
+    sigma_best = (26.275540424824687*0.4e-6)/2.355  
+    print("sigma_best:", sigma_best)
+
+    np.testing.assert_allclose(
+        sigma_ds['sigma_hat'].values,
+        sigma_best,
+        atol=3e-6,  # absolute tolerance = 3 microseconds
+    )
+    # the tolerance is too high for the last test because the event is an 
+    # evaporation event with a much broader peak shape, which can lead to less 
+    # precise estimates of tau and sigma using the MLE method. In practice, you 
+    # may want to use a different method or adjust the config parameters for evaporation 
+    # events to get more accurate estimates.

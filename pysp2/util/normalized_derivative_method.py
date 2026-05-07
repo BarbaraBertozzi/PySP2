@@ -222,6 +222,10 @@ def _resolve_peakfit_window(
 
     pk_start = float(peak_ds[start_var].isel({event_dim: event_index}).values)
     pk_fwhm = float(peak_ds[width_var].isel({event_dim: event_index}).values)
+    print(f"Resolved peak fit window for event {event_index}, channel {ch_num}:")
+    print(f"  {start_var} = {pk_start}")
+    print(f"  {width_var} = {pk_fwhm}")
+    print(f"  0.4e-6 * pk_fwhm = {0.4e-6 * pk_fwhm}")
 
     if not np.isfinite(pk_start):
         raise ValueError(f"Invalid peak start: {pk_start}")
@@ -458,7 +462,7 @@ def mle_tau_moteki_kondo(
     # --- Peak-based fit window ---
     # This ensures the MLE only evaluates subsets within the Gaussian peak region.
     fit_start, fit_stop, _ = _resolve_peakfit_window(
-        S_original,
+        peak_ds=S_original,
         event_index=event_index,
         ch=ch,
         event_dim=event_dim,
@@ -667,7 +671,7 @@ def compute_d2_moteki_kondo(
 
    # --- Same peak-based window as MLE ---
     fit_start, fit_stop, _ = _resolve_peakfit_window(
-        S_original,
+        peak_ds=S_original,
         event_index=event_index,
         ch=ch,
         event_dim=event_dim,
@@ -803,7 +807,7 @@ def compute_sigma_moteki_kondo(
 
     # Same internal peak-based window used by the tau and d2 routines.
     fit_start, fit_stop, _ = _resolve_peakfit_window(
-        S_original,
+        peak_ds=S_original,
         event_index=event_index,
         ch=ch if ch is not None else "Data_ch0",
         event_dim=event_dim,
