@@ -1078,7 +1078,7 @@ def plot_incident_irradiance(
     # Normalized derivative.
     line1, = ax.plot(
         t_plot,
-        y_norm/0.1e7,  # Scale for visibility
+        y_norm,  # Scale for visibility
         label=f"{ch_name} (Normalized dS/dt)",
         linewidth=1.2,
     )
