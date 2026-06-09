@@ -55,7 +55,7 @@ def central_difference(S, num_records=None, normalize=True, baseline_to_zero=Tru
     if num_records is None:
         num_records = S.sizes['event_index']
 
-    dt = 200e-9
+    dt = 0.4
     channels = ['Data_ch0', 'Data_ch4']
     dSdt = {}
 
@@ -81,10 +81,12 @@ def central_difference(S, num_records=None, normalize=True, baseline_to_zero=Tru
         n = y.shape[1]
         d[:, n-2] = (25*y[:, n-2] - 48*y[:, n-3] + 36*y[:, n-4] - 16*y[:, n-5] + 3*y[:, n-6]) / (12*dt)
         d[:, n-1] = (25*y[:, n-1] - 48*y[:, n-2] + 36*y[:, n-3] - 16*y[:, n-4] + 3*y[:, n-5]) / (12*dt)
+        print(f"Central difference computed for {ch}, first 10 values: {d[0, :10]}")
 
         if normalize:
             with np.errstate(divide='ignore', invalid='ignore'):
                 d = np.where(y != 0, d / y, 0)  
+            print(f"Normalized derivative values for {ch}: {d[0, :10]}")
         else:
             d = d
 
@@ -131,8 +133,8 @@ def plot_normalized_derivative(S, ds, record_no, chn=0, plot_scattering_signal=F
     inp_data['time'] = xr.DataArray(np.array(time[np.newaxis]),
                                     dims=['time'])
 
-    bins = np.arange(0, 0.00004-0.3e-6, 0.4e-6)  # 0 to 0.0004 microseconds in steps of 0.4e-6 seconds
-    bins = bins*1e6  # convert to microseconds for plotting
+    bins = np.arange(0, 40, 0.4)  # 0 to 39 in steps of 0.4
+    #bins = bins*1e6  # convert to microseconds for plotting
 
     ch_name = f'Data_ch{chn}'
     plt.figure(figsize=(10, 6))
@@ -145,8 +147,9 @@ def plot_normalized_derivative(S, ds, record_no, chn=0, plot_scattering_signal=F
     )
 
     ax.set_xlim([bins[0], bins[-1]])
-    ax.set_xlabel('Time ($\\mu$s)')
-    ax.set_ylabel('Normalized Derivative')
+    ax.set_xlabel(r'Time ($\mu$s)')
+    ax.set_ylim([-1.0,1.0])
+    ax.set_ylabel(r'Normalized Derivative ($\rm \mu s^{-1}$)')
 
     # --- Secondary axis: scattering signal ---
     if plot_scattering_signal:
@@ -228,7 +231,7 @@ def _resolve_peakfit_window(
     print(f"  {start_var} = {pk_start}")
     print(f"  {pos_var} = {pk_pos}")
     print(f"  {width_var} = {pk_fwhm}")
-    print(f"  0.4e-6 * pk_fwhm = {0.4e-6 * pk_fwhm}")
+    print(f"  0.4 * pk_fwhm = {0.4 * pk_fwhm}")
 
     if not np.isfinite(pk_start):
         raise ValueError(f"Invalid peak start: {pk_start}")
@@ -980,7 +983,7 @@ def plot_incident_irradiance(
     sigma_ds: Optional[xr.Dataset] = None,
     tau: Optional[float] = None,
     sigma: Optional[float] = None,
-    h: float = 0.4e-6,
+    h: float = 0.4,
     time_units: str = "us",
     show_fit_window: bool = True,
 ):
@@ -1044,13 +1047,13 @@ def plot_incident_irradiance(
     # Use the same bins convention everywhere.
     t = np.arange(n_samples, dtype=float) * h
     if time_units == "us":
-        t_plot = t * 1e6
-        tau_scale = 1e6
-        x_label = "Time ($\\mu$s)"
-    elif time_units == "s":
         t_plot = t
         tau_scale = 1.0
-        x_label = "Time (s)"
+        x_label = r"Time ($\rm \mu$s)"
+    elif time_units == "s":
+        t_plot = t * 1e-6
+        tau_scale = 1.0e-6
+        x_label = r"Time (s)"
     else:
         raise ValueError("time_units must be 'us' or 's'.")
 
@@ -1093,9 +1096,9 @@ def plot_incident_irradiance(
     )
 
     ax.set_xlabel(x_label)
-    ax.set_ylim(-1.5, 1.5)
+    ax.set_ylim(-1.0, 1.0)
     ax.set_xlim(t_plot[10], t_plot[-30])
-    ax.set_ylabel("Normalized Derivative")
+    ax.set_ylabel(r"Normalized Derivative ($\rm \mu s^{-1}$)")
     ax.grid(True, alpha=0.3)
 
     # Optional fit window shading.
