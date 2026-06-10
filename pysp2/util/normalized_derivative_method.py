@@ -67,6 +67,9 @@ def central_difference(S, num_records=None, normalize=True, baseline_to_zero=Tru
             y_min = np.nanmin(y, axis=1, keepdims=True)   # shape (n_records, 1)
             y = y - y_min
         d = np.full_like(y, np.nan, dtype=np.float64)
+        print(f"y for event 720: {y[720, :4]}")
+        print(f"y for event 720: {y[720, 17:21]}")
+        print(f"y for event 720: {y[720, :-4]}")
 
         # Interior points (vectorized)
         d[:, 2:-2] = (
