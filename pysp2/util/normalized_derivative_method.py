@@ -67,9 +67,6 @@ def central_difference(S, num_records=None, normalize=True, baseline_to_zero=Tru
             y_min = np.nanmin(y, axis=1, keepdims=True)   # shape (n_records, 1)
             y = y - y_min
         d = np.full_like(y, np.nan, dtype=np.float64)
-        print(f"y for event 720: {y[720, :4]}")
-        print(f"y for event 720: {y[720, 17:21]}")
-        print(f"y for event 720: {y[720, :-4]}")
 
         # Interior points (vectorized)
         d[:, 2:-2] = (
@@ -84,12 +81,10 @@ def central_difference(S, num_records=None, normalize=True, baseline_to_zero=Tru
         n = y.shape[1]
         d[:, n-2] = (25*y[:, n-2] - 48*y[:, n-3] + 36*y[:, n-4] - 16*y[:, n-5] + 3*y[:, n-6]) / (12*dt)
         d[:, n-1] = (25*y[:, n-1] - 48*y[:, n-2] + 36*y[:, n-3] - 16*y[:, n-4] + 3*y[:, n-5]) / (12*dt)
-        print(f"Central difference computed for {ch}, first 10 values: {d[0, :10]}")
 
         if normalize:
             with np.errstate(divide='ignore', invalid='ignore'):
                 d = np.where(y != 0, d / y, 0)  
-            print(f"Normalized derivative values for {ch}: {d[0, :10]}")
         else:
             d = d
 
@@ -229,12 +224,6 @@ def _resolve_peakfit_window(
     pk_start = float(peak_ds[start_var].isel({event_dim: event_index}).values)
     pk_pos = float(peak_ds[pos_var].isel({event_dim: event_index}).values)
     pk_fwhm = float(peak_ds[width_var].isel({event_dim: event_index}).values)
-
-    print(f"Resolved peak fit window for event {event_index}, channel {ch_num}:")
-    print(f"  {start_var} = {pk_start}")
-    print(f"  {pos_var} = {pk_pos}")
-    print(f"  {width_var} = {pk_fwhm}")
-    print(f"  0.4 * pk_fwhm = {0.4 * pk_fwhm}")
 
     if not np.isfinite(pk_start):
         raise ValueError(f"Invalid peak start: {pk_start}")
@@ -762,7 +751,7 @@ def compute_sigma_moteki_kondo(
     y_sample_dim: Optional[str] = None,
     min_start: int = 15,
     width_metric: str = "fwhm",
-    d2_threshold: float = 200000.0,
+    d2_threshold: float = 80000.0,
     config: Optional[MLEConfig] = None,
 ) -> xr.Dataset:
     """
