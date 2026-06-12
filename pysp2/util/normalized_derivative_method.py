@@ -1068,12 +1068,16 @@ def plot_incident_irradiance(
     # Expected I'/I line from Moteki & Kondo.
     i_ratio_expected = -(t_plot - tau_plot) / (sigma_plot ** 2)
 
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["mathtext.fontset"] = "stix"   
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Normalized derivative.
     line1, = ax.plot(
         t_plot,
         y_norm,  # Scale for visibility
+        'o',
+        color="blue",
         label=f"{ch_name} (Normalized dS/dt)",
         linewidth=1.2,
     )
@@ -1082,7 +1086,8 @@ def plot_incident_irradiance(
     line2, = ax.plot(
         t_plot,
         i_ratio_expected,
-        linestyle="--",
+        color="blue",
+        alpha=0.5,
         linewidth=2.0,
         label=r"Expected $I'(t)/I(t)$",
     )
@@ -1090,8 +1095,10 @@ def plot_incident_irradiance(
     ax.set_xlabel(x_label)
     ax.set_ylim(-1.0, 1.0)
     ax.set_xlim(t_plot[10], t_plot[-30])
-    ax.set_ylabel(r"Normalized Derivative ($\rm \mu s^{-1}$)")
+    ax.set_ylabel(r"Normalized Derivative ($\rm \mu s^{-1}$)", 
+                  color="blue")
     ax.grid(True, alpha=0.3)
+    ax.tick_params(axis="y", colors="blue")
 
     # Optional fit window shading.
     if show_fit_window and sigma_ds is not None:
@@ -1126,13 +1133,14 @@ def plot_incident_irradiance(
 
         lines = [line1,line2, line3]
         labels = [l.get_label() for l in lines]
-        ax.legend(lines, labels, loc="best")
+        ax.legend(lines, labels, loc="best", fontsize=10)
     else:
-        ax.legend(loc="best")
+        ax.legend(loc="best", fontsize=10)
 
     ax.set_title(
         f"Normalized Derivative, Expected I'(t)/I(t), and Scattering Signal - "
-        f"Channel {chn} Record {record_no}"
+        f"Channel {chn} Record {record_no}",
+        pad=20,  # increase space between title and plot
     )
 
     return ax
