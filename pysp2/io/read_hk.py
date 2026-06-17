@@ -48,6 +48,53 @@ def read_hk_file(file_name):
     return my_df
 
 
+def read_sp2xr_hk_file(file_name):
+    """
+    This procedure will read in an SP2-XR housekeeping file (.csv or .zip)
+    and store the timeseries data into an xarray Dataset.
+
+    The SP2-XR housekeeping file uses comma-separated values (rather than
+    tab-separated like the original SP2). The 'Time Stamp (UTC sec)' column
+    is used to build the time coordinate, sharing the same 1904-01-01 epoch
+    as the original SP2 'Timestamp' column.
+
+    Parameters
+    ----------
+    file_name: str
+        The file name to read in (.csv or .zip).
+
+    Returns
+    -------
+    hk_ds: xarray.Dataset
+        The housekeeping information as an xarray Dataset indexed by time.
+    """
+
+    my_df = act.io.read_csv(file_name, sep=",")
+
+    # Parse time from the UTC seconds column (same 1904 epoch as SP2)
+    start_time = pd.Timestamp('1904-01-01')
+    my_df = my_df.rename({'index': 'time'})
+    my_df['time'] = np.array([
+        start_time + datetime.timedelta(seconds=x)
+        for x in my_df['Time Stamp (UTC sec)'].values
+    ])
+    my_df['time'].attrs['units'] = "datetime"
+    my_df['time'].attrs['long_name'] = "Time [SP2-XR time]"
+
+    # Extract units from column names following the "Name (units)" convention
+    for vars in my_df.variables.keys():
+        splits = vars.split("(")
+        try:
+            units = splits[1][:-1]
+            my_df[vars].attrs['units'] = units
+            my_df[vars].attrs['long_name'] = vars
+            my_df = my_df.rename({vars: splits[0][:-1]})
+        except (IndexError, ValueError):
+            continue
+
+    return my_df
+
+
 def get_hk_variable_names(my_df):
     """
     This procedure will return al ist of variables in the
