@@ -9,7 +9,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .read_hk import read_sp2xr_hk_file
+from .read_hk import read_sp2xr_hk_file, _attach_sp2xr_calibration_attrs
 
 
 # SP2-XR PbP column names mapped to PySP2-style equivalents. Variables on the
@@ -72,7 +72,10 @@ def read_sp2xr_pbp(file_name, keep_firmware_calibration=False):
     By default, the pre-calibrated 'Scatter Size (nm)' and 'Incand Mass
     (fg)' columns are dropped to encourage recalibration with consistent
     curves. Pass keep_firmware_calibration=True to retain them as
-    'firmware_ScatterSize_nm' and 'firmware_IncandMass_fg'.
+    'firmware_ScatterSize_nm' and 'firmware_IncandMass_fg'; in that case
+    the scattering / incandescence calibration CSVs ('*_Scatt_*.csv' and
+    '*_Incan_*.csv') are auto-located alongside the PbP file and attached
+    as dataset attributes for provenance.
 
     Absolute particle datetimes are derived from the matching SP2-XR HK
     file, which is auto-located in the same directory. Each acquisition
@@ -126,6 +129,11 @@ def read_sp2xr_pbp(file_name, keep_firmware_calibration=False):
     df.index = pd.Index(np.arange(len(df), dtype='float32'), name='event_index')
     ds = df.to_xarray()
     ds['EventIndex'] = ds['event_index']
+
+    # Attach calibration curve provenance only when the firmware-calibrated
+    # size / mass columns are retained.
+    if keep_firmware_calibration:
+        _attach_sp2xr_calibration_attrs(ds, file_name)
 
     # Auto-locate the matching HK file to derive absolute datetimes.
     # The filename itself cannot be trusted: it always encodes the session

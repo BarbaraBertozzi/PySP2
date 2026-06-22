@@ -117,6 +117,10 @@ def read_sp2xr_hk_file(file_name):
         except (IndexError, ValueError):
             continue
 
+    # Attach calibration curve provenance (used by the firmware to derive
+    # the retained Mass Conc columns).
+    _attach_sp2xr_calibration_attrs(my_df, file_name)
+
     return my_df
 
 
