@@ -9,6 +9,25 @@ def test_read_sp2xr_hk_file():
     assert 'Laser TEC Temp' in hk.data_vars
     np.testing.assert_almost_equal(
         float(hk['Cavity Pressure'].mean()), 288.88, decimal=2)
+    # Firmware-computed PSD bin columns should be excluded; use
+    # read_sp2xr_hk_psd() to access them.
+    assert not any(str(v).startswith(('Scatter Bin', 'Incand Bin'))
+                   for v in hk.data_vars)
+
+
+def test_read_sp2xr_hk_psd():
+    psd = pysp2.io.read_sp2xr_hk_psd(pysp2.testing.EXAMPLE_SP2XR_HK)
+    assert psd.sizes['time'] == 20650
+    # The number of bins is read dynamically from the file; just verify
+    # that some bins are present and that both channels agree.
+    assert psd.sizes['num_bins'] > 0
+    assert 'ScatNumEnsemble' in psd.data_vars
+    assert 'IncanNumEnsemble' in psd.data_vars
+    assert psd['ScatNumEnsemble'].shape == psd['IncanNumEnsemble'].shape
+    # Calibration sample CSVs are committed alongside the HK file and
+    # should be auto-detected and attached as dataset attributes.
+    assert 'ScatCalibration_Diameter_nm' in psd.attrs
+    assert 'IncanCalibration_Mass_fg' in psd.attrs
 
 
 def test_read_sp2xr():
