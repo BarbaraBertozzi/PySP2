@@ -9,6 +9,7 @@ This module contains all of the procedures for reading and writing SP2 data.
 
     read_hk_file
     read_sp2xr_hk_file
+    read_sp2xr_hk_psd
     get_hk_variable_names
     read_sp2
     read_sp2xr
@@ -24,7 +25,7 @@ This module contains all of the procedures for reading and writing SP2 data.
 """
 
 from .read_hk import read_hk_file, get_hk_variable_names, read_sp2xr_hk_file
-from .read_hk import read_multi_hk_file
+from .read_hk import read_sp2xr_hk_psd, read_multi_hk_file
 from .read_sp2b import read_sp2, read_sp2xr
 from .read_pbp import read_sp2xr_pbp
 from .read_ini import read_config
